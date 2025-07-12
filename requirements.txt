@@ -30,6 +30,5 @@ python-dotenv
 #pywin32
 httpie
 azure-storage-blob
-azure-identity azure-keyvault-secrets
-
-
+azure-identity
+azure-keyvault-secrets
