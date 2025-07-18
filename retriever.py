@@ -4,7 +4,6 @@
 
 import os
 import tempfile
-from io import BytesIO
 from azure.identity import DefaultAzureCredential
 from azure.keyvault.secrets import SecretClient
 from azure.storage.blob import BlobServiceClient
@@ -14,25 +13,18 @@ from PyPDF2 import PdfReader
 # CONFIGURACIÓN DE KEY VAULT
 # ------------------------
 
-# Nombre del Key Vault
-KEY_VAULT_NAME = "mi-keyvault"
-SECRET_NAME = "AzureBlobSasToken"
-
-# Construir la URL del Key Vault
+KEY_VAULT_NAME = "pocragweb"
+SECRET_NAME = "POC-RAG-WEB-BLTBKM1-STORAGE1"
 KV_URI = f"https://{KEY_VAULT_NAME}.vault.azure.net"
 
-# Autenticación usando el contexto 
 credential = DefaultAzureCredential()
 secret_client = SecretClient(vault_url=KV_URI, credential=credential)
-
-# Obtener la SAS Token del secreto
 sas_token = secret_client.get_secret(SECRET_NAME).value
 
 # ------------------------
 # CONFIGURACIÓN DE BLOB STORAGE
 # ------------------------
 
-# Usar la SAS Token obtenida para construir la cadena de conexión
 AZURE_SAS_URL = (
     "BlobEndpoint=https://testingmlai.blob.core.windows.net/;"
     "QueueEndpoint=https://testingmlai.queue.core.windows.net/;"
@@ -41,13 +33,11 @@ AZURE_SAS_URL = (
     f"SharedAccessSignature={sas_token}"
 )
 
-CONTAINER_NAME = "azureml-blobstore-b70b1075-9c59-4b11-8dc1-7f0c1649da09"
-BLOB_DIR = "RAG_Source_Storage"
+CONTAINER_NAME = "pocragweb"
+BLOB_DIR = "BD_Knowledge"
 
-# Inicializar clientes de Azure Blob
 blob_service_client = BlobServiceClient.from_connection_string(AZURE_SAS_URL)
 container_client = blob_service_client.get_container_client(CONTAINER_NAME)
-
 
 
 def load_pdfs_azure():
@@ -61,10 +51,15 @@ def load_pdfs_azure():
             continue
 
         print(f"🔹 Descargando: {blob.name}")
-        downloader = container_client.download_blob(blob.name)
-        pdf_stream = BytesIO(downloader.readall())
 
-        reader = PdfReader(pdf_stream)
+        # Guardar temporalmente el PDF para procesarlo de forma segura
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as temp_pdf:
+            downloader = container_client.download_blob(blob.name)
+            downloader.download_to_stream(temp_pdf)
+            temp_pdf_path = temp_pdf.name
+
+        # Procesar el PDF desde el archivo temporal
+        reader = PdfReader(temp_pdf_path)
         pages_texts = []
         pages_numbers = []
 
@@ -73,6 +68,9 @@ def load_pdfs_azure():
             if text and text.strip():
                 pages_texts.append({"page": i + 1, "text": text.strip()})
                 pages_numbers.append(i + 1)
+
+        # Eliminar el archivo temporal
+        os.remove(temp_pdf_path)
 
         if pages_texts:
             title = pages_texts[0]["text"].split("\n")[0].strip()
@@ -112,9 +110,9 @@ def compress_page_ranges(pages):
 
 
 def load_pdfs_google():
-    # Implementar carga desde Google Cloud
     return [], []
 
+
 def load_pdfs_aws():
-    # Implementar carga desde AWS
     return [], []
+
