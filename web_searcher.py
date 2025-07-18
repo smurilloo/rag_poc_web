@@ -10,11 +10,22 @@ from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 import time
 import textwrap
+from azure.identity import DefaultAzureCredential
+from azure.keyvault.secrets import SecretClient
 
-# Configura tu API key
-genai.configure(api_key="AIzaSyD4DG2T5KlFUK9ohBzsO4Jf99uye_7XXJE")  # ← reemplaza con tu API key
+# Configuración del Key Vault
+KEY_VAULT_NAME = "pocragweb" 
+SECRET_NAME = "POC-RAG-WEB-BLTBKM2"
 
-# Ruta al chromedriver instalado manualmente en Dockerfile
+KV_URI = f"https://{KEY_VAULT_NAME}.vault.azure.net"
+credential = DefaultAzureCredential()
+client = SecretClient(vault_url=KV_URI, credential=credential)
+api_key = client.get_secret(SECRET_NAME).value
+
+# Configura la API key para Gemini
+genai.configure(api_key=api_key)
+
+# Ruta al chromedriver instalado manualmente cuando se usa Dockerfile
 CHROMEDRIVER_PATH = "/usr/bin/chromedriver"
 
 def get_web_papers_selenium(query: str, max_pages: int = 10) -> List[Dict]:
@@ -89,7 +100,7 @@ Aquí están los artículos a analizar:
     response = model.generate_content(full_prompt)
     raw_summary = response.text.strip()
 
-    # Aplicar wrap para evitar líneas muy largas, respetando saltos de línea originales
+    # Aplicar wrap para evitar líneas muy largas, respetando saltos de línea
     wrapped_summary = "\n".join(
         textwrap.fill(line, width=80) for line in raw_summary.splitlines()
     )
