@@ -2,28 +2,41 @@
 # luego usa inteligencia artificial para combinar y resumir esa información en una respuesta clara y organizada.
 
 
-import google.generativeai as genai
+import os
 import textwrap
+import google.generativeai as genai
+from sentence_transformers import SentenceTransformer
 from vectorizacion import client, COLLECTION_NAME
-from sentence_transformers import SentenceTransformer  # Importar SentenceTransformer
+from azure.identity import DefaultAzureCredential
+from azure.keyvault.secrets import SecretClient
 
-genai.configure(api_key="AIzaSyBnzr9P1NSCcF36lXHtf1tA5I9gfIiCcmg")
+# ------------------------
+# Obtener la API Key desde Azure Key Vault
+# ------------------------
 
-# Inicializar el modelo de SentenceTransformer
+KEY_VAULT_NAME = "pocragweb"
+SECRET_NAME = "POC-RAG-WEB-BLTBKM1"
+KV_URI = f"https://{KEY_VAULT_NAME}.vault.azure.net"
+
+credential = DefaultAzureCredential()
+secret_client = SecretClient(vault_url=KV_URI, credential=credential)
+api_key = secret_client.get_secret(SECRET_NAME).value
+
+# Configurar Gemini con la API Key obtenida
+genai.configure(api_key=api_key)
+
+# Inicializar modelo de embeddings
 encoder = SentenceTransformer("all-MiniLM-L6-v2")
 
-def search_qdrant(query, top_k=5):
-    # Codificar la consulta
-    query_vector = encoder.encode(query).tolist()
 
-    # Buscar en la colección de Qdrant
+def search_qdrant(query, top_k=5):
+    query_vector = encoder.encode(query).tolist()
     hits = client.search(
         collection_name=COLLECTION_NAME,
         query_vector=query_vector,
         limit=top_k
     )
 
-    # Procesar los resultados
     results = []
     for hit in hits:
         payload = hit.payload
@@ -37,8 +50,8 @@ def search_qdrant(query, top_k=5):
         })
     return results
 
+
 def synthesize_answer(query, pdfs, pdf_metadata, memory, web_papers):
-    # Consultar la base de datos vectorial
     qdrant_results = search_qdrant(query, top_k=5)
 
     pdf_section = ""
@@ -46,7 +59,6 @@ def synthesize_answer(query, pdfs, pdf_metadata, memory, web_papers):
     documents = ""
 
     if pdfs and pdf_metadata:
-        # Construir listado para fuentes - PDFs
         pdf_list_text = "\n".join(
             f"- {item['filename']} - {item['title']} (páginas: {item['pages']})"
             for item in pdf_metadata
@@ -55,37 +67,30 @@ def synthesize_answer(query, pdfs, pdf_metadata, memory, web_papers):
         instruccion_archivos = (
             "IMPORTANTE: El modelo no tiene acceso a los archivos originales, "
             "solo al contenido textual proporcionado. Menciona explícitamente las fuentes citadas "
-            "usando el formato 'nombre_archivo.pdf - Título del paper (páginas)'. "
+            "usando el formato 'nombre_archivo.pdf - Título del paper/documento (páginas)'. "
             "Usa las páginas específicas donde aparece la información relevante."
         )
 
-        # Concatenar texto por páginas con marca de página
         parts = []
         for pdf in pdfs:
             for page in pdf['pages_texts']:
                 parts.append(f"[{pdf['filename']} - Página {page['page']}]\n{page['text']}")
         documents = "\n\n".join(parts)
 
-    # Para papers web
     web_section = ""
     instruccion_web = ""
     if web_papers:
-        # Dividir los textos web en páginas de 500 caracteres y agregar la numeración de página
         web_parts = []
         for wp in sorted(web_papers, key=lambda x: x.get("score", 0), reverse=True):
             title = wp['title']
             url = wp['url']
             snippet = wp['snippet']
-
-            # Dividir el resumen en bloques de 500 caracteres (simulando las páginas)
             page_num = 1
             for i in range(0, len(snippet), 500):
                 page_text = snippet[i:i+500]
                 web_parts.append(f"{url} - {title} (página {page_num})\n{page_text}")
                 page_num += 1
-
         web_section = f"Artículos web relevantes desde Google Scholar:\n" + "\n\n".join(web_parts) + "\n"
-
         instruccion_web = (
             "A partir de los artículos web anteriores, redacta un análisis claro y conciso, "
             "incorporando los siguientes elementos:\n"
@@ -101,7 +106,6 @@ def synthesize_answer(query, pdfs, pdf_metadata, memory, web_papers):
             "- Añade saltos de línea para mejorar la lectura.\n"
         )
 
-    # Agregar resultados de Qdrant al prompt
     qdrant_section = ""
     if qdrant_results:
         qdrant_text = "\n\n".join(
@@ -135,7 +139,6 @@ El último parrafo debe ser un resumen sintetizando la información para respond
     model = genai.GenerativeModel("models/gemini-1.5-flash")
     response = model.generate_content(prompt)
     raw_summary = response.text.strip()
-
     wrapped_summary = "\n".join(textwrap.fill(line, width=80) for line in raw_summary.splitlines())
 
     return wrapped_summary
