@@ -9,21 +9,23 @@ from azure.keyvault.secrets import SecretClient
 from azure.storage.blob import BlobServiceClient
 from PyPDF2 import PdfReader
 
-# ------------------------
-# CONFIGURACIÓN DE KEY VAULT
-# ------------------------
-
+# ----------------------------
+# Config segura: Key Vault o variable de entorno
+# ----------------------------
 KEY_VAULT_NAME = "pocragweb"
-SECRET_NAME = "POC-RAG-WEB-BLTBKM1-STORAGE1"
+SECRET_NAME_STORAGE = "POC-RAG-WEB-BLTBKM1-STORAGE1"
 KV_URI = f"https://{KEY_VAULT_NAME}.vault.azure.net"
 
-credential = DefaultAzureCredential()
-secret_client = SecretClient(vault_url=KV_URI, credential=credential)
-sas_token = secret_client.get_secret(SECRET_NAME).value
+try:
+    credential = DefaultAzureCredential()
+    secret_client = SecretClient(vault_url=KV_URI, credential=credential)
+    sas_token = secret_client.get_secret(SECRET_NAME_STORAGE).value
+except Exception as e:
+    print(f"⚠️ Key Vault falló: {e}")
+    sas_token = os.getenv("AZURE_STORAGE_SAS_TOKEN")
 
-# ------------------------
-# CONFIGURACIÓN DE BLOB STORAGE
-# ------------------------
+if not sas_token:
+    raise ValueError("❌ AZURE_STORAGE_SAS_TOKEN no está configurada ni disponible en Key Vault.")
 
 AZURE_SAS_URL = (
     "BlobEndpoint=https://testingmlai.blob.core.windows.net/;"
