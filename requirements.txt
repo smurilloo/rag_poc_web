@@ -1,6 +1,6 @@
 # Core web app framework
 fastapi               # Framework web moderno para APIs
-uvicorn               # Servidor ASGI para correr FastAPI
+uvicorn[standard]               # Servidor ASGI para correr FastAPI
 
 # PDF handling
 PyPDF2                # Lectura y manipulación de archivos PDF
