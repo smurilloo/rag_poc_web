@@ -4,83 +4,80 @@
 
 import os
 import tempfile
-from azure.identity import DefaultAzureCredential
-from azure.keyvault.secrets import SecretClient
-from azure.storage.blob import BlobServiceClient
+from azure.storage.blob import ContainerClient
 from PyPDF2 import PdfReader
 
-# -----------------------------
 # Configuración desde variables de entorno
-# -----------------------------
-sas_token = os.getenv("AZURE_STORAGE_SAS_TOKEN")
-if not sas_token:
+container_url = os.getenv("AZURE_STORAGE_SAS_TOKEN")
+if not container_url:
     raise ValueError("❌ Falta AZURE_STORAGE_SAS_TOKEN")
 
-AZURE_SAS_URL = (
-    "BlobEndpoint=https://testingmlai.blob.core.windows.net/;"
-    "QueueEndpoint=https://testingmlai.queue.core.windows.net/;"
-    "FileEndpoint=https://testingmlai.file.core.windows.net/;"
-    "TableEndpoint=https://testingmlai.table.core.windows.net/;"
-    f"SharedAccessSignature={sas_token}"
-)
+# Inicializar cliente de contenedor directamente con la URL SAS completa
+container_client = ContainerClient.from_container_url(f"{container_url}")
 
-CONTAINER_NAME = "pocragweb"
-BLOB_DIR = "BD_Knowledge"
-
-blob_service_client = BlobServiceClient.from_connection_string(AZURE_SAS_URL)
-container_client = blob_service_client.get_container_client(CONTAINER_NAME)
-
+# ------------------------
+# FUNCIONES DE CARGA DE PDF
+# ------------------------
 
 def load_pdfs_azure():
     pdfs = []
     metadatas = []
 
-    blobs = container_client.list_blobs(name_starts_with=BLOB_DIR)
+    try:
+        blobs = container_client.list_blobs(name_starts_with="BD_Knowledge")
+    except Exception as e:
+        raise RuntimeError(f"❌ Error al listar blobs en BD_Knowledge: {e}")
 
     for blob in blobs:
         if not blob.name.endswith(".pdf"):
             continue
 
-        print(f"🔹 Descargando: {blob.name}")
+        print(f"📥 Descargando: {blob.name}")
 
-        # Guardar temporalmente el PDF para procesarlo de forma segura
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as temp_pdf:
-            downloader = container_client.download_blob(blob.name)
-            downloader.download_to_stream(temp_pdf)
-            temp_pdf_path = temp_pdf.name
+        try:
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as temp_pdf:
+                downloader = container_client.download_blob(blob.name)
+                downloader.download_to_stream(temp_pdf)
+                temp_pdf_path = temp_pdf.name
+        except Exception as e:
+            print(f"⚠️ Error al descargar {blob.name}: {e}")
+            continue
 
-        # Procesar el PDF desde el archivo temporal
-        reader = PdfReader(temp_pdf_path)
-        pages_texts = []
-        pages_numbers = []
+        try:
+            reader = PdfReader(temp_pdf_path)
+            pages_texts = []
+            pages_numbers = []
 
-        for i, page in enumerate(reader.pages):
-            text = page.extract_text()
-            if text and text.strip():
-                pages_texts.append({"page": i + 1, "text": text.strip()})
-                pages_numbers.append(i + 1)
+            for i, page in enumerate(reader.pages):
+                text = page.extract_text()
+                if text and text.strip():
+                    pages_texts.append({"page": i + 1, "text": text.strip()})
+                    pages_numbers.append(i + 1)
 
-        # Eliminar el archivo temporal
-        os.remove(temp_pdf_path)
+            if pages_texts:
+                title = pages_texts[0]["text"].split("\n")[0].strip()
+                filename = os.path.basename(blob.name)
 
-        if pages_texts:
-            title = pages_texts[0]["text"].split("\n")[0].strip()
-            filename = os.path.basename(blob.name)
+                pdfs.append({
+                    "filename": filename,
+                    "title": title,
+                    "pages_texts": pages_texts
+                })
 
-            pdfs.append({
-                "filename": filename,
-                "title": title,
-                "pages_texts": pages_texts
-            })
+                metadatas.append({
+                    "filename": filename,
+                    "title": title,
+                    "pages": compress_page_ranges(pages_numbers)
+                })
 
-            metadatas.append({
-                "filename": filename,
-                "title": title,
-                "pages": compress_page_ranges(pages_numbers)
-            })
+        except Exception as e:
+            print(f"⚠️ Error procesando PDF {blob.name}: {e}")
+
+        finally:
+            if os.path.exists(temp_pdf_path):
+                os.remove(temp_pdf_path)
 
     return pdfs, metadatas
-
 
 def compress_page_ranges(pages):
     if not pages:
@@ -99,11 +96,9 @@ def compress_page_ranges(pages):
     ranges.append(f"{start}-{prev}" if start != prev else f"{start}")
     return ",".join(ranges)
 
-
+# Otros proveedores de nube
 def load_pdfs_google():
     return [], []
 
-
 def load_pdfs_aws():
     return [], []
-
