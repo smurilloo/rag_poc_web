@@ -10,24 +10,12 @@ from vectorizacion import client, COLLECTION_NAME
 from azure.identity import DefaultAzureCredential
 from azure.keyvault.secrets import SecretClient
 
-# ----------------------------
-# Config segura: Key Vault o variable de entorno
-# ----------------------------
-KEY_VAULT_NAME = "pocragweb"
-SECRET_NAME_GEMINI_1 = "POC-RAG-WEB-BLTBKM1"
-
-KV_URI = f"https://{KEY_VAULT_NAME}.vault.azure.net"
-
-try:
-    credential = DefaultAzureCredential()
-    secret_client = SecretClient(vault_url=KV_URI, credential=credential)
-    api_key = secret_client.get_secret(SECRET_NAME_GEMINI_1).value
-except Exception as e:
-    print(f"⚠️ Key Vault falló para GEMINI_API_KEY_1: {e}")
-    api_key = os.getenv("GEMINI_API_KEY_1")
-
+# -----------------------------
+# Configuración desde variables de entorno
+# -----------------------------
+api_key = os.getenv("GEMINI_API_KEY_1")
 if not api_key:
-    raise ValueError("❌ GEMINI_API_KEY_1 no está configurada ni disponible en Key Vault.")
+    raise ValueError("❌ Falta GEMINI_API_KEY_1")
 
 genai.configure(api_key=api_key)
 encoder = SentenceTransformer("all-MiniLM-L6-v2")
