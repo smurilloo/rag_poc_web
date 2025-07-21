@@ -5,20 +5,20 @@ from qdrant_client.models import Distance, VectorParams, PointStruct, PointIdsLi
 from sentence_transformers import SentenceTransformer
 from dotenv import load_dotenv
 
-# Cargar .env
-load_dotenv()
-
-QDRANT_API_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhY2Nlc3MiOiJtIn0.9JTbVpMHEC_Pxy9smljTg6MYaLoco6iuw-9eaY75CJM"
-QDRANT_URL = "https://1730be49-201a-4ad4-ac38-0c5e2e86d0b9.us-west-2-0.aws.cloud.qdrant.io:6333"
+# -----------------------------
+# Configuración desde variables de entorno
+# -----------------------------
+QDRANT_API_KEY = os.getenv("QDRANT_API_KEY1")
+QDRANT_URL = os.getenv("QDRANT_URL")  # Opcional si usas una URL fija
 COLLECTION_NAME = "vector_bd"
 
 if not QDRANT_API_KEY:
-    raise ValueError("❌ Falta la QDRANT_API_KEY")
+    raise ValueError("❌ Falta QDRANT_API_KEY1")
 
 encoder = SentenceTransformer("all-MiniLM-L6-v2")
 
 client = QdrantClient(
-    url=QDRANT_URL,
+    url=QDRANT_URL or "https://1730be49-201a-4ad4-ac38-0c5e2e86d0b9.us-west-2-0.aws.cloud.qdrant.io:6333",
     api_key=QDRANT_API_KEY,
     prefer_grpc=False,
     timeout=120
