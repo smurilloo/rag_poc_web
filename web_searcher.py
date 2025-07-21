@@ -10,26 +10,20 @@ from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 import time
 import textwrap
-from azure.identity import DefaultAzureCredential
-from azure.keyvault.secrets import SecretClient
+import os
 
-# -----------------------------
+
 # Configuración desde variables de entorno
-# -----------------------------
 api_key = os.getenv("GEMINI_API_KEY_2")
 if not api_key:
     raise ValueError("❌ Falta GEMINI_API_KEY_2")
 
 genai.configure(api_key=api_key)
 
-
-# Ruta al chromedriver instalado manualmente cuando se usa Dockerfile
-CHROMEDRIVER_PATH = "/usr/bin/chromedriver"
-
-def get_web_papers_selenium(query: str, max_pages: int = 10) -> List[Dict]:
+def get_web_papers_selenium(query: str, max_pages: int = 2) -> List[Dict]:
     base_url = "https://scholar.google.com/scholar"
 
-    # Opciones para entorno Docker
+    # Opciones para entorno headless
     options = Options()
     options.add_argument("--headless=new")
     options.add_argument("--no-sandbox")
@@ -40,8 +34,8 @@ def get_web_papers_selenium(query: str, max_pages: int = 10) -> List[Dict]:
     options.add_argument("--disable-setuid-sandbox")
     options.add_argument("--remote-debugging-port=9222")
 
-    # Inicia el navegador con el chromedriver ubicado en el sistema
-    driver = webdriver.Chrome(service=Service(CHROMEDRIVER_PATH), options=options)
+    # Inicia el navegador con las opciones headless
+    driver = webdriver.Chrome(options=options)
 
     results = []
     for page in range(max_pages):
@@ -76,9 +70,11 @@ def get_annotated_summary(query: str) -> str:
     )
 
     full_prompt = f"""
-Analiza los siguientes artículos científicos obtenidos de Google Scholar y genera un resumen claro y estructurado en formato tipo documento. Por favor:
 
-- Usa dos párrafos separados.
+"Usando una respuesta corta de maximo 4 parrafos realiza lo siguiente,"
+Analiza los siguientes artículos científicos obtenidos de Google Scholar y genera un resumen claro y estructurado en formato tipo documento:
+
+- Usa 4 párrafos separados.
 - Incorpora títulos y URLs destacados en líneas propias.
   usando el formato 'url paper - Título del paper (páginas)',
   Usa las páginas específicas donde aparece la información relevante,
@@ -94,11 +90,11 @@ Aquí están los artículos a analizar:
 {prompt}
 """
 
-    model = genai.GenerativeModel("models/gemini-1.5-flash")
+    model = genai.GenerativeModel("models/gemini-2.5-flash")
     response = model.generate_content(full_prompt)
     raw_summary = response.text.strip()
 
-    # Aplicar wrap para evitar líneas muy largas, respetando saltos de línea
+    # Aplicar wrap para evitar líneas muy largas, respetando saltos de línea originales
     wrapped_summary = "\n".join(
         textwrap.fill(line, width=80) for line in raw_summary.splitlines()
     )
