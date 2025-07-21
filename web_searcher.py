@@ -13,24 +13,12 @@ import textwrap
 from azure.identity import DefaultAzureCredential
 from azure.keyvault.secrets import SecretClient
 
-# ----------------------------
-# Config segura: Key Vault o variable de entorno
-# ----------------------------
-KEY_VAULT_NAME = "pocragweb"
-SECRET_NAME_GEMINI_2 = "POC-RAG-WEB-BLTBKM2"
-
-KV_URI = f"https://{KEY_VAULT_NAME}.vault.azure.net"
-
-try:
-    credential = DefaultAzureCredential()
-    secret_client = SecretClient(vault_url=KV_URI, credential=credential)
-    api_key = secret_client.get_secret(SECRET_NAME_GEMINI_2).value
-except Exception as e:
-    print(f"⚠️ Key Vault falló para GEMINI_API_KEY_2: {e}")
-    api_key = os.getenv("GEMINI_API_KEY_2")
-
+# -----------------------------
+# Configuración desde variables de entorno
+# -----------------------------
+api_key = os.getenv("GEMINI_API_KEY_2")
 if not api_key:
-    raise ValueError("❌ GEMINI_API_KEY_2 no está configurada ni disponible en Key Vault.")
+    raise ValueError("❌ Falta GEMINI_API_KEY_2")
 
 genai.configure(api_key=api_key)
 
