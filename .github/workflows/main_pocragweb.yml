@@ -39,8 +39,10 @@ jobs:
         with:
           name: python-app
           path: |
-            .
+            ./*
             !venv/
+            !**/__pycache__/
+            !**/*.pyc
 
   deploy:
     runs-on: ubuntu-latest
