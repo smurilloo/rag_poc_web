@@ -20,17 +20,14 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Create and start virtual environment
+      - name: Install dependencies
         run: |
           python -m venv venv
-          source venv/bin/activate
+          ./venv/bin/pip install -r requirements.txt
 
-      - name: Install dependencies
-        run: pip install -r requirements.txt
-
-      - name: Clean up large or unnecessary files before packaging
+      - name: Clean up unnecessary files before packaging
         run: |
-          rm -rf venv __pycache__ *.ipynb *.csv *.pkl *.tar.gz *.zip *.log
+          rm -rf __pycache__ *.ipynb *.csv *.pkl *.tar.gz *.zip *.log
 
       - name: Upload artifact for deployment jobs
         uses: actions/upload-artifact@v4
@@ -38,6 +35,8 @@ jobs:
           name: python-app
           path: |
             ./
+            main.py
+            requirements.txt
             static/
             !venv/
             !__pycache__/
