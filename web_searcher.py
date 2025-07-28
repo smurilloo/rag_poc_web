@@ -20,10 +20,13 @@ if not api_key:
 
 genai.configure(api_key=api_key)
 
+# Ruta al chromedriver (usa ruta absoluta)
+CHROMEDRIVER_PATH = "/usr/bin/chromedriver"
+
 def get_web_papers_selenium(query: str, max_pages: int = 2) -> List[Dict]:
     base_url = "https://scholar.google.com/scholar"
 
-    # Opciones para entorno headless
+    # Opciones headless para Selenium
     options = Options()
     options.add_argument("--headless=new")
     options.add_argument("--no-sandbox")
@@ -34,8 +37,9 @@ def get_web_papers_selenium(query: str, max_pages: int = 2) -> List[Dict]:
     options.add_argument("--disable-setuid-sandbox")
     options.add_argument("--remote-debugging-port=9222")
 
-    # Inicia el navegador con las opciones headless
-    driver = webdriver.Chrome(options=options)
+    # Usar ruta explícita al chromedriver
+    service = Service(executable_path=CHROMEDRIVER_PATH)
+    driver = webdriver.Chrome(service=service, options=options)
 
     results = []
     for page in range(max_pages):
@@ -94,7 +98,7 @@ Aquí están los artículos a analizar:
     response = model.generate_content(full_prompt)
     raw_summary = response.text.strip()
 
-    # Aplicar wrap para evitar líneas muy largas, respetando saltos de línea originales
+    # Ajuste de líneas a 80 caracteres
     wrapped_summary = "\n".join(
         textwrap.fill(line, width=80) for line in raw_summary.splitlines()
     )
