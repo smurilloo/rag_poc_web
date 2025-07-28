@@ -12,7 +12,6 @@ import time
 import textwrap
 import os
 
-
 # Configuración desde variables de entorno
 api_key = os.getenv("GEMINI_API_KEY_2")
 if not api_key:
@@ -23,9 +22,12 @@ genai.configure(api_key=api_key)
 def get_web_papers_selenium(query: str, max_pages: int = 2) -> List[Dict]:
     base_url = "https://scholar.google.com/scholar"
 
+    # Ruta al chromedriver configurable
+    CHROMEDRIVER_PATH = os.getenv("CHROMEDRIVER_PATH", "/usr/bin/chromedriver")
+
     # Opciones para entorno headless
     options = Options()
-    options.add_argument("--headless=new")
+    options.add_argument("--headless=new")  # Usa --headless si falla
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-dev-shm-usage")
     options.add_argument("--disable-gpu")
@@ -33,16 +35,21 @@ def get_web_papers_selenium(query: str, max_pages: int = 2) -> List[Dict]:
     options.add_argument("--disable-software-rasterizer")
     options.add_argument("--disable-setuid-sandbox")
     options.add_argument("--remote-debugging-port=9222")
+    options.add_argument(
+        "user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36"
+    )
 
-    # Inicia el navegador con las opciones headless
-    driver = webdriver.Chrome(options=options)
+    # Inicia el navegador
+    service = Service(executable_path=CHROMEDRIVER_PATH)
+    driver = webdriver.Chrome(service=service, options=options)
+    driver.implicitly_wait(5)  # Espera implícita
 
     results = []
     for page in range(max_pages):
         start = page * 10
         search_url = f"{base_url}?q={query.replace(' ', '+')}&start={start}"
         driver.get(search_url)
-        time.sleep(3)
 
         articles = driver.find_elements(By.CSS_SELECTOR, "div.gs_ri")
         for art in articles:
@@ -71,7 +78,7 @@ def get_annotated_summary(query: str) -> str:
 
     full_prompt = f"""
 
-"Usando una respuesta corta de maximo 4 parrafos realiza lo siguiente,"
+"Usando una respuesta corta de máximo 4 párrafos realiza lo siguiente,"
 Analiza los siguientes artículos científicos obtenidos de Google Scholar y genera un resumen claro y estructurado en formato tipo documento:
 
 - Usa 4 párrafos separados.
