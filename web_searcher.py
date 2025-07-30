@@ -8,26 +8,29 @@ from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
+from webdriver_manager.chrome import ChromeDriverManager
 import time
 import textwrap
 import os
 
-# Configuración desde variables de entorno
+# Configuración de la API Key de Gemini
 api_key = os.getenv("GEMINI_API_KEY_2")
 if not api_key:
     raise ValueError("❌ Falta GEMINI_API_KEY_2")
 
 genai.configure(api_key=api_key)
 
-import undetected_chromedriver as uc
+# URL base de Google Scholar
+base_url = "https://scholar.google.com/scholar"
 
 def get_web_papers_selenium(query: str, max_pages: int = 2) -> List[Dict]:
-    options = uc.ChromeOptions()
-    options.add_argument("--headless=new")
-    options.add_argument("--no-sandbox")
-    options.add_argument("--disable-dev-shm-usage")
+    # Configuración del navegador sin encabezado (headless)
+    chrome_options = Options()
+    chrome_options.add_argument("--headless=new")
+    chrome_options.add_argument("--no-sandbox")
+    chrome_options.add_argument("--disable-dev-shm-usage")
 
-    driver = uc.Chrome(options=options)
+    driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=chrome_options)
     driver.implicitly_wait(5)
 
     results = []
