@@ -23,7 +23,7 @@ jobs:
       - name: Install Chrome, Chromedriver y dependencias del sistema
         run: |
           sudo apt-get update
-          sudo apt-get install -y wget unzip \
+          sudo apt-get install -y wget unzip jq \
             libnss3 libnspr4 libatk-bridge2.0-0 libxss1 \
             libgbm1 libxcomposite1 libxcursor1 libxdamage1 \
             libxi6 libxrandr2 libpango-1.0-0 libcairo2 \
@@ -35,21 +35,19 @@ jobs:
           CHROME_VERSION=$(google-chrome --version | grep -oP '\d+\.\d+\.\d+')
           echo "Detected Chrome version: $CHROME_VERSION"
 
-          CHROMEDRIVER_VERSION=$(curl -s "https://googlechromelabs.github.io/chrome-for-testing/last-known-good-versions-with-downloads.json" \
-            | jq -r --arg ver "$CHROME_VERSION" '.channels.Stable.versions[] | select(.version | startswith($ver)) | .downloads.chromedriver[] | select(.platform == "linux64") | .url' | head -n 1)
+          DRIVER_VERSION=$(curl -s https://googlechromelabs.github.io/chrome-for-testing/last-known-good-versions-with-downloads.json \
+            | jq -r '.channels.Stable.version')
 
-          if [[ -z "$CHROMEDRIVER_VERSION" ]]; then
-            echo "No matching chromedriver found for Chrome version $CHROME_VERSION"
-            exit 1
-          fi
+          DRIVER_URL=$(curl -s https://googlechromelabs.github.io/chrome-for-testing/last-known-good-versions-with-downloads.json \
+            | jq -r '.channels.Stable.downloads.chromedriver[] | select(.platform == "linux64") | .url')
 
-          wget -O chromedriver.zip "$CHROMEDRIVER_VERSION"
+          wget -O chromedriver.zip "$DRIVER_URL"
           unzip chromedriver.zip
           sudo mv chromedriver-linux64/chromedriver /usr/local/bin/chromedriver
           sudo chmod +x /usr/local/bin/chromedriver
 
-          chromedriver --version
           google-chrome --version
+          chromedriver --version
 
       - name: Install Python dependencies
         run: |
@@ -60,7 +58,8 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: python-app
-          path: .
+          path: |
+            .
 
   deploy:
     runs-on: ubuntu-latest
