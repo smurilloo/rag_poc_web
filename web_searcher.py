@@ -2,10 +2,6 @@
 # extrae títulos, resúmenes y enlaces, y luego genera un resumen claro y organizado
 # con ayuda de una inteligencia artificial para facilitar la comprensión del contenido.
 
-# Este código busca artículos científicos en Google Scholar usando web Scrapping con Selenium,
-# extrae títulos, resúmenes y enlaces, y luego genera un resumen claro y organizado
-# con ayuda de una inteligencia artificial para facilitar la comprensión del contenido.
-
 import os
 import textwrap
 from typing import List, Dict
