@@ -21,9 +21,9 @@ if not api_key:
     raise ValueError("❌ Falta la variable de entorno: GEMINI_API_KEY_2")
 genai.configure(api_key=api_key)
 
-# ✅ Rutas fijas
-CHROME_PATH = "/usr/bin/google-chrome"
-CHROMEDRIVER_PATH = "/usr/bin/chromedriver"
+# ✅ Rutas dentro del contenedor App Service
+CHROME_PATH = "/home/site/wwwroot/bin/google-chrome"
+CHROMEDRIVER_PATH = "/home/site/wwwroot/bin/chromedriver"
 
 # ✅ Instala Google Chrome si no existe
 def install_chrome():
