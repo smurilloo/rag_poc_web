@@ -9,6 +9,9 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    container:
+      image: zenika/alpine-chrome:with-node  # ✅ Imagen con Chrome, Chromedriver y librerías ya instaladas
+
     permissions:
       contents: read
 
@@ -19,27 +22,6 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-
-      - name: Set up Chrome
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y wget unzip
-          
-          mkdir -p bin
-
-          # Install Chrome manually (static build)
-          wget https://storage.googleapis.com/chrome-for-testing-public/124.0.6367.91/linux64/chrome-linux64.zip -O chrome.zip
-          unzip chrome.zip
-          mv chrome-linux64/chrome bin/google-chrome
-          chmod +x bin/google-chrome
-          rm -rf chrome.zip chrome-linux64
-
-          # Install Chromedriver matching version
-          wget https://storage.googleapis.com/chrome-for-testing-public/124.0.6367.91/linux64/chromedriver-linux64.zip -O chromedriver.zip
-          unzip chromedriver.zip
-          mv chromedriver-linux64/chromedriver bin/chromedriver
-          chmod +x bin/chromedriver
-          rm -rf chromedriver.zip chromedriver-linux64
 
       - name: Create virtual environment and install deps
         run: |
