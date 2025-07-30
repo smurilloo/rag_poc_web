@@ -1,28 +1,28 @@
 import os
 import textwrap
+import tempfile
 from typing import List, Dict
 
 import google.generativeai as genai
 
-# Librerías Selenium
+# Selenium
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 from selenium.common.exceptions import WebDriverException
 
-# ✅ Instalación automática de ChromeDriver
+# Auto-instalación de ChromeDriver
 import chromedriver_autoinstaller
 chromedriver_autoinstaller.install()
 
-# ✅ Validación de API Key de Gemini
+# API Key de Gemini
 api_key = os.getenv("GEMINI_API_KEY_2")
 if not api_key:
     raise ValueError("❌ Falta la variable de entorno: GEMINI_API_KEY_2")
 genai.configure(api_key=api_key)
 
-
-# ✅ Inicializa ChromeDriver (modo headless, compatible Azure)
+# ✅ Inicializa ChromeDriver (modo headless, compatible con Azure App Service)
 def create_chrome_driver():
     chrome_options = Options()
     chrome_options.add_argument("--headless=new")
@@ -32,7 +32,11 @@ def create_chrome_driver():
     chrome_options.add_argument("--disable-extensions")
     chrome_options.add_argument("--remote-debugging-port=9222")
 
-    # Si existe un binario fijo en App Service, úsalo
+    # 🧠 Solución al error: crea un user-data-dir temporal único
+    temp_user_data_dir = tempfile.mkdtemp()
+    chrome_options.add_argument(f"--user-data-dir={temp_user_data_dir}")
+
+    # Si estás usando binario específico (ej. App Service)
     chrome_bin_path = "/home/site/wwwroot/bin/google-chrome"
     if os.path.isfile(chrome_bin_path):
         chrome_options.binary_location = chrome_bin_path
@@ -41,7 +45,6 @@ def create_chrome_driver():
         return webdriver.Chrome(options=chrome_options)
     except WebDriverException as e:
         raise RuntimeError(f"❌ Error inicializando ChromeDriver: {e}")
-
 
 # 🔍 Scraping de artículos en Google Scholar
 def get_web_papers_selenium(query: str, max_pages: int = 2) -> List[Dict]:
@@ -75,7 +78,6 @@ def get_web_papers_selenium(query: str, max_pages: int = 2) -> List[Dict]:
 
     driver.quit()
     return results
-
 
 # ✍️ Generación de resumen con Gemini
 def get_annotated_summary(query: str) -> str:
