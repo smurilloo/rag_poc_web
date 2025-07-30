@@ -32,4 +32,4 @@ httpie
 azure-storage-blob
 azure-identity
 azure-keyvault-secrets
-webdriver-manager
+textwrap3
