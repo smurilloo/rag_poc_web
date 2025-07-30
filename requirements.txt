@@ -32,4 +32,4 @@ httpie
 azure-storage-blob
 azure-identity
 azure-keyvault-secrets
-undetected-chromedriver
+selenium webdriver-manager
