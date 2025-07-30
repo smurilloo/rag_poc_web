@@ -33,22 +33,33 @@ jobs:
           wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
           sudo apt-get install -y ./google-chrome-stable_current_amd64.deb
 
-      - name: Install compatible ChromeDriver and move to App Service path
+            - name: Install compatible ChromeDriver and move to App Service path
         run: |
           mkdir -p bin
 
-          CHROME_VERSION=$(google-chrome --version | grep -oP "\d+\.\d+\.\d+")
-          CHROMEDRIVER_URL=$(curl -s "https://googlechromelabs.github.io/chrome-for-testing/last-known-good-versions-with-downloads.json" | \
-            jq -r --arg ver "$CHROME_VERSION" '
-              .channels.Stable.downloads.chromedriver[]
-              | select(.platform == "linux64" and (.version | tostring | startswith($ver)))
-              | .url' | head -n 1)
+          CHROME_VERSION_FULL=$(google-chrome --version | grep -oP '\d+\.\d+\.\d+\.\d+')
+          CHROME_VERSION_SHORT=$(echo $CHROME_VERSION_FULL | cut -d. -f1-3)
 
-          if [ -z "$CHROMEDRIVER_URL" ]; then
-            echo "❌ Error: No matching ChromeDriver found for Chrome version $CHROME_VERSION"
+          echo "✅ Chrome full version: $CHROME_VERSION_FULL"
+          echo "🔎 Searching ChromeDriver for: $CHROME_VERSION_SHORT"
+
+          JSON=$(curl -s https://googlechromelabs.github.io/chrome-for-testing/last-known-good-versions-with-downloads.json)
+          if [ -z "$JSON" ]; then
+            echo "❌ Error: Could not fetch ChromeDriver index."
             exit 1
           fi
 
+          CHROMEDRIVER_URL=$(echo "$JSON" | jq -r --arg ver "$CHROME_VERSION_SHORT" '
+            .channels.Stable.downloads.chromedriver[]?
+            | select(.platform == "linux64" and (.version | tostring | startswith($ver)))
+            | .url' | head -n 1)
+
+          if [ -z "$CHROMEDRIVER_URL" ] || [ "$CHROMEDRIVER_URL" == "null" ]; then
+            echo "❌ Error: No matching ChromeDriver found for Chrome version $CHROME_VERSION_SHORT"
+            exit 1
+          fi
+
+          echo "⬇️ Downloading ChromeDriver from: $CHROMEDRIVER_URL"
           wget -O chromedriver.zip "$CHROMEDRIVER_URL"
           unzip chromedriver.zip
           mv chromedriver-linux64/chromedriver bin/chromedriver
