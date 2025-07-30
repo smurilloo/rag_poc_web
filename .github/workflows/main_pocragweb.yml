@@ -1,3 +1,7 @@
+# Docs for the Azure Web Apps Deploy action: https://github.com/Azure/webapps-deploy
+# More GitHub Actions for Azure: https://github.com/Azure/actions
+# More info on Python, GitHub Actions, and Azure App Service: https://aka.ms/python-webapps-actions
+
 name: Build and deploy Python app to Azure Web App - pocragweb
 
 on:
@@ -10,102 +14,58 @@ jobs:
   build:
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: read #This is required for actions/checkout
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python 3.12
+      - name: Set up Python version
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
 
-      - name: Install system dependencies and Google Chrome
+      - name: Create and start virtual environment
         run: |
-          sudo apt-get update
-          sudo apt-get install -y wget unzip jq \
-            libnss3 libnspr4 libatk-bridge2.0-0 libxss1 \
-            libgbm1 libxcomposite1 libxcursor1 libxdamage1 \
-            libxi6 libxrandr2 libpango-1.0-0 libcairo2 \
-            libfontconfig1 libfreetype6 libx11-xcb1 libxcb1 \
-            libgtk-3-0
+          python -m venv venv
+          source venv/bin/activate
+      
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+        
+      # Optional: Add step to run tests here (PyTest, Django test suites, etc.)
 
-          wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
-          sudo apt-get install -y ./google-chrome-stable_current_amd64.deb
-
-      - name: Install compatible ChromeDriver and move to App Service path
-        run: |
-          mkdir -p bin
-
-          CHROME_VERSION_FULL=$(google-chrome --version | grep -oP '\d+\.\d+\.\d+\.\d+')
-          CHROME_VERSION_SHORT=$(echo $CHROME_VERSION_FULL | cut -d. -f1-3)
-
-          echo "✅ Chrome full version: $CHROME_VERSION_FULL"
-          echo "🔎 Searching ChromeDriver for: $CHROME_VERSION_SHORT"
-
-          JSON=$(curl -s https://googlechromelabs.github.io/chrome-for-testing/last-known-good-versions-with-downloads.json)
-          if [ -z "$JSON" ]; then
-            echo "❌ Error: Could not fetch ChromeDriver index."
-            exit 1
-          fi
-
-          CHROMEDRIVER_URL=$(echo "$JSON" | jq -r --arg ver "$CHROME_VERSION_SHORT" '
-            .channels.Stable.downloads.chromedriver[]?
-            | select(.platform == "linux64" and (.version | tostring | startswith($ver)))
-            | .url' | head -n 1)
-
-          if [ -z "$CHROMEDRIVER_URL" ] || [ "$CHROMEDRIVER_URL" == "null" ]; then
-            echo "❌ Error: No matching ChromeDriver found for Chrome version $CHROME_VERSION_SHORT"
-            exit 1
-          fi
-
-          echo "⬇️ Downloading ChromeDriver from: $CHROMEDRIVER_URL"
-          wget -O chromedriver.zip "$CHROMEDRIVER_URL"
-          unzip chromedriver.zip
-          mv chromedriver-linux64/chromedriver bin/chromedriver
-          chmod +x bin/chromedriver
-
-          cp $(which google-chrome) bin/google-chrome
-          chmod +x bin/google-chrome
-
-          echo "✅ Chrome version:"
-          ./bin/google-chrome --version
-          echo "✅ Chromedriver version:"
-          ./bin/chromedriver --version
-
-      - name: Install Python dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-
-      - name: Upload artifact
+      - name: Upload artifact for deployment jobs
         uses: actions/upload-artifact@v4
         with:
           name: python-app
-          path: .
+          path: |
+            .
+            !venv/
 
   deploy:
     runs-on: ubuntu-latest
     needs: build
     permissions:
-      id-token: write
-      contents: read
+      id-token: write #This is required for requesting the JWT
+      contents: read #This is required for actions/checkout
 
     steps:
-      - name: Download artifact
+      - name: Download artifact from build job
         uses: actions/download-artifact@v4
         with:
           name: python-app
-
+      
       - name: Login to Azure
         uses: azure/login@v2
         with:
-          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_23B0BF1561E84071B1118AC0A28CFAA8 }}
-          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_7D0853879A594DCDB325D6865B71305C }}
-          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_38FF3ECAB2184C8A98B0C65C735F6059 }}
+          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_0FB107A608B846A180DC1476524D4B76 }}
+          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_E554E5DEB25B47C2AE36A4B258C8CEF2 }}
+          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_266A1168370340B4BDEED0FB487FD340 }}
 
-      - name: Deploy to Azure Web App
+      - name: 'Deploy to Azure Web App'
         uses: azure/webapps-deploy@v3
+        id: deploy-to-webapp
         with:
           app-name: 'pocragweb'
           slot-name: 'Production'
+          
