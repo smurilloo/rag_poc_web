@@ -23,41 +23,38 @@ if not api_key:
     raise ValueError("❌ Falta GEMINI_API_KEY_2")
 genai.configure(api_key=api_key)
 
-# ✅ Ruta de instalación de Chrome y Chromedriver
-CHROME_PATH = "/usr/local/bin/google-chrome"
-CHROMEDRIVER_PATH = "/usr/local/bin/chromedriver"
+# ✅ Ruta fija para Chrome y Chromedriver en Azure App Service
+CHROME_PATH = "/usr/bin/google-chrome"
+CHROMEDRIVER_PATH = "/usr/bin/chromedriver"
 
 # ✅ Instala Chrome si no existe
 def ensure_chrome_installed():
     if not os.path.exists(CHROME_PATH):
-        print("🔧 Descargando Google Chrome...")
-        subprocess.run([
-            "wget", "https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb", "-O", "chrome.deb"
-        ])
-        subprocess.run(["apt-get", "update"])
-        subprocess.run(["apt-get", "install", "-y", "./chrome.deb"])
-        shutil.move("/usr/bin/google-chrome", CHROME_PATH)
+        print("🔧 Instalando Google Chrome...")
+        subprocess.run(["apt-get", "update"], check=True)
+        subprocess.run(["apt-get", "install", "-y", "wget", "gnupg2", "unzip", "apt-transport-https", "ca-certificates"], check=True)
+        subprocess.run(["wget", "-q", "-O", "-", "https://dl.google.com/linux/linux_signing_key.pub"], stdout=subprocess.PIPE)
+        subprocess.run(["sh", "-c", 'echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google-chrome.list'], check=True)
+        subprocess.run(["apt-get", "update"], check=True)
+        subprocess.run(["apt-get", "install", "-y", "google-chrome-stable"], check=True)
 
 # ✅ Instala Chromedriver si no existe
 def ensure_chromedriver_installed():
     if not os.path.exists(CHROMEDRIVER_PATH):
-        print("🔧 Descargando Chromedriver...")
-        subprocess.run([
-            "wget", "https://chromedriver.storage.googleapis.com/124.0.6367.91/chromedriver_linux64.zip", "-O", "chromedriver.zip"
-        ])
-        subprocess.run(["apt-get", "install", "-y", "unzip"])
-        subprocess.run(["unzip", "chromedriver.zip"])
+        print("🔧 Instalando Chromedriver...")
+        subprocess.run(["wget", "https://chromedriver.storage.googleapis.com/124.0.6367.91/chromedriver_linux64.zip", "-O", "chromedriver.zip"], check=True)
+        subprocess.run(["unzip", "chromedriver.zip"], check=True)
         shutil.move("chromedriver", CHROMEDRIVER_PATH)
         os.chmod(CHROMEDRIVER_PATH, 0o755)
 
-# ✅ Llama estas funciones al inicio
+# ✅ Inicializa entorno
 ensure_chrome_installed()
 ensure_chromedriver_installed()
 
 # 🔍 Scraping en Google Scholar
 def get_web_papers_selenium(query: str, max_pages: int = 2) -> List[Dict]:
     chrome_options = Options()
-    chrome_options.add_argument("--headless")
+    chrome_options.add_argument("--headless=new")
     chrome_options.add_argument("--no-sandbox")
     chrome_options.add_argument("--disable-dev-shm-usage")
     chrome_options.binary_location = CHROME_PATH
@@ -86,7 +83,6 @@ def get_web_papers_selenium(query: str, max_pages: int = 2) -> List[Dict]:
 
     driver.quit()
     return results
-
 
 # ✍️ Resumen usando Gemini
 def get_annotated_summary(query: str) -> str:
