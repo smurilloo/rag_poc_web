@@ -21,43 +21,32 @@ if not api_key:
     raise ValueError("❌ Falta la variable de entorno: GEMINI_API_KEY_2")
 genai.configure(api_key=api_key)
 
-# ✅ Rutas dentro del contenedor App Service
-CHROME_PATH = "/home/site/wwwroot/bin/google-chrome"
-CHROMEDRIVER_PATH = "/home/site/wwwroot/bin/chromedriver"
+# ✅ Rutas locales para App Service
+BIN_DIR = "/home/site/wwwroot/bin"
+CHROME_PATH = f"{BIN_DIR}/google-chrome"
+CHROMEDRIVER_PATH = f"{BIN_DIR}/chromedriver"
 
 # ✅ Instala Google Chrome si no existe
 def install_chrome():
     if not os.path.exists(CHROME_PATH):
         print("🔧 Instalando Google Chrome...")
+        os.makedirs(BIN_DIR, exist_ok=True)
         subprocess.run([
-            "apt-get", "update"
+            "wget", "https://storage.googleapis.com/chrome-for-testing-public/124.0.6367.91/linux64/chrome-linux64.zip", "-O", "chrome.zip"
         ], check=True)
-        subprocess.run([
-            "apt-get", "install", "-y",
-            "wget", "gnupg2", "unzip", "apt-transport-https",
-            "ca-certificates", "curl"
-        ], check=True)
-        subprocess.run([
-            "bash", "-c",
-            "curl -fsSL https://dl.google.com/linux/linux_signing_key.pub | gpg --dearmor -o /usr/share/keyrings/google-chrome.gpg"
-        ], check=True)
-        subprocess.run([
-            "bash", "-c",
-            'echo "deb [arch=amd64 signed-by=/usr/share/keyrings/google-chrome.gpg] http://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google-chrome.list'
-        ], check=True)
-        subprocess.run([
-            "apt-get", "update"
-        ], check=True)
-        subprocess.run([
-            "apt-get", "install", "-y", "google-chrome-stable"
-        ], check=True)
+        subprocess.run(["unzip", "chrome.zip"], check=True)
+        shutil.move("chrome-linux64/chrome", CHROME_PATH)
+        os.chmod(CHROME_PATH, 0o755)
+        shutil.rmtree("chrome-linux64")
+        os.remove("chrome.zip")
 
 # ✅ Instala Chromedriver si no existe
 def install_chromedriver():
     if not os.path.exists(CHROMEDRIVER_PATH):
         print("🔧 Instalando Chromedriver...")
-        url = "https://storage.googleapis.com/chrome-for-testing-public/124.0.6367.91/linux64/chromedriver-linux64.zip"
-        subprocess.run(["wget", url, "-O", "chromedriver.zip"], check=True)
+        subprocess.run([
+            "wget", "https://storage.googleapis.com/chrome-for-testing-public/124.0.6367.91/linux64/chromedriver-linux64.zip", "-O", "chromedriver.zip"
+        ], check=True)
         subprocess.run(["unzip", "chromedriver.zip"], check=True)
         shutil.move("chromedriver-linux64/chromedriver", CHROMEDRIVER_PATH)
         os.chmod(CHROMEDRIVER_PATH, 0o755)
