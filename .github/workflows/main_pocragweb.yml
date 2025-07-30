@@ -30,14 +30,24 @@ jobs:
             libfontconfig1 libfreetype6 libx11-xcb1 libxcb1
 
           wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
-          sudo apt-get install -y ./google-chrome-stable_current_amd64.deb
+          sudo dpkg -i google-chrome-stable_current_amd64.deb || sudo apt-get install -f -y
 
-          CHROME_VERSION=$(google-chrome --version | grep -oP "\d+\.\d+\.\d+")
-          CHROMEDRIVER_VERSION=$(curl -fsSL "https://chromedriver.storage.googleapis.com/LATEST_RELEASE_$CHROME_VERSION")
-          wget -O chromedriver.zip "https://chromedriver.storage.googleapis.com/$CHROMEDRIVER_VERSION/chromedriver_linux64.zip"
+          CHROME_VERSION=$(google-chrome --version | grep -oP '\d+\.\d+\.\d+')
+          echo "Detected Chrome version: $CHROME_VERSION"
+
+          CHROMEDRIVER_VERSION=$(curl -s "https://googlechromelabs.github.io/chrome-for-testing/last-known-good-versions-with-downloads.json" \
+            | jq -r --arg ver "$CHROME_VERSION" '.channels.Stable.versions[] | select(.version | startswith($ver)) | .downloads.chromedriver[] | select(.platform == "linux64") | .url' | head -n 1)
+
+          if [[ -z "$CHROMEDRIVER_VERSION" ]]; then
+            echo "No matching chromedriver found for Chrome version $CHROME_VERSION"
+            exit 1
+          fi
+
+          wget -O chromedriver.zip "$CHROMEDRIVER_VERSION"
           unzip chromedriver.zip
-          sudo mv chromedriver /usr/local/bin/chromedriver
+          sudo mv chromedriver-linux64/chromedriver /usr/local/bin/chromedriver
           sudo chmod +x /usr/local/bin/chromedriver
+
           chromedriver --version
           google-chrome --version
 
@@ -50,8 +60,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: python-app
-          path: |
-            .
+          path: .
 
   deploy:
     runs-on: ubuntu-latest
