@@ -51,10 +51,14 @@ jobs:
           mv chromedriver-linux64/chromedriver bin/chromedriver
           chmod +x bin/chromedriver
 
+          # Copiar chrome al path requerido por Selenium
+          cp $(which google-chrome) bin/google-chrome
+          chmod +x bin/google-chrome
+
           echo "✅ Chrome version:"
-          google-chrome --version
+          ./bin/google-chrome --version
           echo "✅ Chromedriver version:"
-          bin/chromedriver --version
+          ./bin/chromedriver --version
 
       - name: Install Python dependencies
         run: |
