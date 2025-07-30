@@ -20,7 +20,7 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Install system dependencies, Chrome & ChromeDriver
+      - name: Install system dependencies and Chrome
         run: |
           sudo apt-get update
           sudo apt-get install -y wget unzip jq \
@@ -33,23 +33,28 @@ jobs:
           wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
           sudo apt-get install -y ./google-chrome-stable_current_amd64.deb
 
-          CHROME_VERSION=$(google-chrome --version | grep -oP "\d+\.\d+\.\d+")
-          CHROMEDRIVER_VERSION=$(curl -s "https://googlechromelabs.github.io/chrome-for-testing/last-known-good-versions-with-downloads.json" | jq -r ".channels.Stable.downloads.chromedriver[] | select(.platform == \"linux64\") | select(.version | startswith(\"$CHROME_VERSION\")) | .url" | head -n 1)
+      - name: Install compatible ChromeDriver and move to App Service path
+        run: |
+          mkdir -p bin
 
-          if [ -z "$CHROMEDRIVER_VERSION" ]; then
+          CHROME_VERSION=$(google-chrome --version | grep -oP "\d+\.\d+\.\d+")
+          CHROMEDRIVER_URL=$(curl -s "https://googlechromelabs.github.io/chrome-for-testing/last-known-good-versions-with-downloads.json" | \
+            jq -r ".channels.Stable.downloads.chromedriver[] | select(.platform == \"linux64\") | select(.version | startswith(\"$CHROME_VERSION\")) | .url" | head -n 1)
+
+          if [ -z "$CHROMEDRIVER_URL" ]; then
             echo "Error: No matching ChromeDriver found for Chrome version $CHROME_VERSION"
             exit 1
           fi
 
-          wget -O chromedriver.zip "$CHROMEDRIVER_VERSION"
+          wget -O chromedriver.zip "$CHROMEDRIVER_URL"
           unzip chromedriver.zip
-          sudo mv chromedriver-linux64/chromedriver /usr/local/bin/chromedriver
-          sudo chmod +x /usr/local/bin/chromedriver
+          mv chromedriver-linux64/chromedriver bin/chromedriver
+          chmod +x bin/chromedriver
 
           echo "✅ Chrome version:"
           google-chrome --version
           echo "✅ Chromedriver version:"
-          chromedriver --version
+          bin/chromedriver --version
 
       - name: Install Python dependencies
         run: |
@@ -84,7 +89,6 @@ jobs:
 
       - name: Deploy to Azure Web App
         uses: azure/webapps-deploy@v3
-        id: deploy-to-webapp
         with:
           app-name: 'pocragweb'
           slot-name: 'Production'
