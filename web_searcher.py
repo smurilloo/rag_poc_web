@@ -2,43 +2,43 @@ import os
 import textwrap
 from typing import List, Dict
 
+import google.generativeai as genai
+
+# Librerías Selenium
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 from selenium.common.exceptions import WebDriverException
 
-import google.generativeai as genai
+# ✅ Instalación automática de ChromeDriver
+import chromedriver_autoinstaller
+chromedriver_autoinstaller.install()
 
-# ✅ Validación de clave de API Gemini
+# ✅ Validación de API Key de Gemini
 api_key = os.getenv("GEMINI_API_KEY_2")
 if not api_key:
     raise ValueError("❌ Falta la variable de entorno: GEMINI_API_KEY_2")
 genai.configure(api_key=api_key)
 
 
-# ✅ Inicializa ChromeDriver en Azure App Service
+# ✅ Inicializa ChromeDriver (modo headless, compatible Azure)
 def create_chrome_driver():
     chrome_options = Options()
     chrome_options.add_argument("--headless=new")
     chrome_options.add_argument("--no-sandbox")
     chrome_options.add_argument("--disable-dev-shm-usage")
     chrome_options.add_argument("--disable-gpu")
+    chrome_options.add_argument("--disable-extensions")
     chrome_options.add_argument("--remote-debugging-port=9222")
 
+    # Si existe un binario fijo en App Service, úsalo
     chrome_bin_path = "/home/site/wwwroot/bin/google-chrome"
-    chromedriver_path = "/home/site/wwwroot/bin/chromedriver"
-
-    if not os.path.isfile(chrome_bin_path):
-        raise FileNotFoundError(f"❌ Chrome no encontrado en {chrome_bin_path}")
-    if not os.path.isfile(chromedriver_path):
-        raise FileNotFoundError(f"❌ ChromeDriver no encontrado en {chromedriver_path}")
-
-    chrome_options.binary_location = chrome_bin_path
-    service = Service(executable_path=chromedriver_path)
+    if os.path.isfile(chrome_bin_path):
+        chrome_options.binary_location = chrome_bin_path
 
     try:
-        return webdriver.Chrome(service=service, options=chrome_options)
+        return webdriver.Chrome(options=chrome_options)
     except WebDriverException as e:
         raise RuntimeError(f"❌ Error inicializando ChromeDriver: {e}")
 
@@ -111,5 +111,3 @@ Artículos:
         return wrapped
     except Exception as e:
         return f"❌ Error al generar el resumen con Gemini: {e}"
-
-
