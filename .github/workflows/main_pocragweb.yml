@@ -10,8 +10,8 @@ jobs:
   build:
     runs-on: ubuntu-latest
     container:
-      image: zenika/alpine-chrome:with-node  # ✅ Imagen con Chrome y Chromedriver
-      options: --user 1001                   # ✅ Ajuste agregado para evitar errores de permisos
+      image: seleniarm/standalone-chromium:124.0
+      options: --user 1001
 
     permissions:
       contents: read
@@ -24,12 +24,10 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Create virtual environment and install deps
+      - name: Install Python dependencies (no venv)
         run: |
-          python -m venv venv
-          source venv/bin/activate
-          pip install --upgrade pip
-          pip install -r requirements.txt
+          python3 -m pip install --upgrade pip
+          python3 -m pip install -r requirements.txt
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -37,7 +35,6 @@ jobs:
           name: python-app
           path: |
             .
-            !venv/
 
   deploy:
     runs-on: ubuntu-latest
