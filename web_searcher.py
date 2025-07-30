@@ -6,6 +6,7 @@ from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
+from selenium.common.exceptions import WebDriverException
 
 import google.generativeai as genai
 
@@ -16,8 +17,8 @@ if not api_key:
 genai.configure(api_key=api_key)
 
 
-# 🔍 Scraping con Selenium en entorno Azure
-def get_web_papers_selenium(query: str, max_pages: int = 2) -> List[Dict]:
+# ✅ Inicializa ChromeDriver en Azure App Service
+def create_chrome_driver():
     chrome_options = Options()
     chrome_options.add_argument("--headless=new")
     chrome_options.add_argument("--no-sandbox")
@@ -25,30 +26,38 @@ def get_web_papers_selenium(query: str, max_pages: int = 2) -> List[Dict]:
     chrome_options.add_argument("--disable-gpu")
     chrome_options.add_argument("--remote-debugging-port=9222")
 
-    # ✅ Rutas instaladas manualmente vía GitHub Actions o Kudu
     chrome_bin_path = "/home/site/wwwroot/bin/google-chrome"
     chromedriver_path = "/home/site/wwwroot/bin/chromedriver"
 
-    if not os.path.exists(chrome_bin_path) or not os.path.exists(chromedriver_path):
-        raise FileNotFoundError("❌ Chrome o ChromeDriver no están instalados en las rutas esperadas.")
+    if not os.path.isfile(chrome_bin_path):
+        raise FileNotFoundError(f"❌ Chrome no encontrado en {chrome_bin_path}")
+    if not os.path.isfile(chromedriver_path):
+        raise FileNotFoundError(f"❌ ChromeDriver no encontrado en {chromedriver_path}")
 
     chrome_options.binary_location = chrome_bin_path
     service = Service(executable_path=chromedriver_path)
 
     try:
-        driver = webdriver.Chrome(service=service, options=chrome_options)
-    except Exception as e:
+        return webdriver.Chrome(service=service, options=chrome_options)
+    except WebDriverException as e:
         raise RuntimeError(f"❌ Error inicializando ChromeDriver: {e}")
 
+
+# 🔍 Scraping de artículos en Google Scholar
+def get_web_papers_selenium(query: str, max_pages: int = 2) -> List[Dict]:
+    driver = create_chrome_driver()
     driver.implicitly_wait(5)
+
     results = []
 
     for page in range(max_pages):
         start = page * 10
         search_url = f"https://scholar.google.com/scholar?q={query.replace(' ', '+')}&start={start}"
+
         try:
             driver.get(search_url)
             articles = driver.find_elements(By.CSS_SELECTOR, "div.gs_ri")
+
             for art in articles:
                 try:
                     title_elem = art.find_element(By.CSS_SELECTOR, "h3 a")
@@ -56,6 +65,7 @@ def get_web_papers_selenium(query: str, max_pages: int = 2) -> List[Dict]:
                     url = title_elem.get_attribute("href")
                     snippet_elem = art.find_elements(By.CLASS_NAME, "gs_rs")
                     snippet = snippet_elem[0].text.strip() if snippet_elem else "No hay resumen disponible."
+
                     results.append({"title": title, "url": url, "snippet": snippet})
                 except Exception:
                     continue
@@ -67,7 +77,7 @@ def get_web_papers_selenium(query: str, max_pages: int = 2) -> List[Dict]:
     return results
 
 
-# ✍️ Generación de resumen estructurado con Gemini
+# ✍️ Generación de resumen con Gemini
 def get_annotated_summary(query: str) -> str:
     papers = get_web_papers_selenium(query)
     if not papers:
@@ -101,3 +111,5 @@ Artículos:
         return wrapped
     except Exception as e:
         return f"❌ Error al generar el resumen con Gemini: {e}"
+
+
