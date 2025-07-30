@@ -2,7 +2,6 @@
 # extrae títulos, resúmenes y enlaces, y luego genera un resumen claro y organizado
 # con ayuda de una inteligencia artificial para facilitar la comprensión del contenido.
 
-
 import os
 import textwrap
 from typing import List, Dict
@@ -14,34 +13,24 @@ from selenium.webdriver.common.by import By
 
 import google.generativeai as genai
 
-# ✅ API Key para Gemini
+# ✅ Cargar la API Key de Gemini desde variables de entorno
 api_key = os.getenv("GEMINI_API_KEY_2")
 if not api_key:
     raise ValueError("❌ Falta la variable de entorno: GEMINI_API_KEY_2")
+
 genai.configure(api_key=api_key)
 
-# ✅ Rutas fijas para Chrome y Chromedriver (instalados vía GitHub Actions)
-BIN_DIR = "/home/site/wwwroot/bin"
-CHROME_PATH = f"{BIN_DIR}/google-chrome"
-CHROMEDRIVER_PATH = f"{BIN_DIR}/chromedriver"
 
-# ✅ Validación de presencia de binarios
-if not os.path.exists(CHROME_PATH):
-    raise FileNotFoundError(f"❌ Chrome no encontrado en {CHROME_PATH}")
-if not os.path.exists(CHROMEDRIVER_PATH):
-    raise FileNotFoundError(f"❌ Chromedriver no encontrado en {CHROMEDRIVER_PATH}")
-
-# 🔍 Scraping de artículos
+# 🔍 Scraping de artículos en Google Scholar usando Selenium
 def get_web_papers_selenium(query: str, max_pages: int = 2) -> List[Dict]:
     chrome_options = Options()
     chrome_options.add_argument("--headless=new")
     chrome_options.add_argument("--no-sandbox")
     chrome_options.add_argument("--disable-dev-shm-usage")
-    chrome_options.binary_location = CHROME_PATH
 
-    service = Service(CHROMEDRIVER_PATH)
+    # ✅ En la nueva imagen base, no es necesario setear binary_location ni chromedriver manual
     try:
-        driver = webdriver.Chrome(service=service, options=chrome_options)
+        driver = webdriver.Chrome(options=chrome_options)
     except Exception as e:
         raise RuntimeError(f"Error inicializando ChromeDriver: {e}")
 
@@ -68,28 +57,30 @@ def get_web_papers_selenium(query: str, max_pages: int = 2) -> List[Dict]:
     driver.quit()
     return results
 
-# ✍️ Generación de resumen con Gemini
+
+# ✍️ Generación de resumen estructurado con Gemini
 def get_annotated_summary(query: str) -> str:
     papers = get_web_papers_selenium(query)
     if not papers:
-        return "No se encontraron artículos."
+        return "No se encontraron artículos científicos para esta consulta."
 
     prompt = "".join(
         f"Título: {p['title']}\nResumen: {p['snippet']}\nURL: {p['url']}\n\n" for p in papers
     )
 
     full_prompt = f"""
-Analiza los siguientes artículos científicos obtenidos de Google Scholar y genera un resumen claro y estructurado en formato tipo documento:
+Analiza los siguientes artículos científicos de Google Scholar y genera un resumen
+estructurado en formato documento:
 
 - Usa 4 párrafos separados.
-- Incorpora títulos y URLs destacados en líneas propias,
-  usando el formato 'url paper - Título del paper (páginas)'.
-- Calcula la página suponiendo 500 caracteres por página.
-- Usa viñetas o numeración para temas comunes o puntos importantes.
-- Añade saltos de línea para facilitar la lectura.
-- No dejes líneas con más de 80 caracteres.
+- En cada artículo, presenta el título y la URL en una línea como:
+  'url del paper - Título del paper (páginas)'
+- Calcula las páginas asumiendo 500 caracteres por página.
+- Usa viñetas o numeración para agrupar temas similares.
+- Añade saltos de línea frecuentes.
+- No uses líneas de más de 80 caracteres.
 
-Artículos a analizar:
+Artículos:
 
 {prompt}
 """
