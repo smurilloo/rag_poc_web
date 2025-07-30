@@ -15,38 +15,40 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python
+      - name: Set up Python 3.12
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
 
-      - name: Install Chrome, Chromedriver y dependencias del sistema
+      - name: Install system dependencies, Chrome & ChromeDriver
         run: |
           sudo apt-get update
           sudo apt-get install -y wget unzip jq \
             libnss3 libnspr4 libatk-bridge2.0-0 libxss1 \
             libgbm1 libxcomposite1 libxcursor1 libxdamage1 \
             libxi6 libxrandr2 libpango-1.0-0 libcairo2 \
-            libfontconfig1 libfreetype6 libx11-xcb1 libxcb1
+            libfontconfig1 libfreetype6 libx11-xcb1 libxcb1 \
+            libgtk-3-0
 
           wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
-          sudo dpkg -i google-chrome-stable_current_amd64.deb || sudo apt-get install -f -y
+          sudo apt-get install -y ./google-chrome-stable_current_amd64.deb
 
-          CHROME_VERSION=$(google-chrome --version | grep -oP '\d+\.\d+\.\d+')
-          echo "Detected Chrome version: $CHROME_VERSION"
+          CHROME_VERSION=$(google-chrome --version | grep -oP "\d+\.\d+\.\d+")
+          CHROMEDRIVER_VERSION=$(curl -s "https://googlechromelabs.github.io/chrome-for-testing/last-known-good-versions-with-downloads.json" | jq -r ".channels.Stable.downloads.chromedriver[] | select(.platform == \"linux64\") | select(.version | startswith(\"$CHROME_VERSION\")) | .url" | head -n 1)
 
-          DRIVER_VERSION=$(curl -s https://googlechromelabs.github.io/chrome-for-testing/last-known-good-versions-with-downloads.json \
-            | jq -r '.channels.Stable.version')
+          if [ -z "$CHROMEDRIVER_VERSION" ]; then
+            echo "Error: No matching ChromeDriver found for Chrome version $CHROME_VERSION"
+            exit 1
+          fi
 
-          DRIVER_URL=$(curl -s https://googlechromelabs.github.io/chrome-for-testing/last-known-good-versions-with-downloads.json \
-            | jq -r '.channels.Stable.downloads.chromedriver[] | select(.platform == "linux64") | .url')
-
-          wget -O chromedriver.zip "$DRIVER_URL"
+          wget -O chromedriver.zip "$CHROMEDRIVER_VERSION"
           unzip chromedriver.zip
           sudo mv chromedriver-linux64/chromedriver /usr/local/bin/chromedriver
           sudo chmod +x /usr/local/bin/chromedriver
 
+          echo "✅ Chrome version:"
           google-chrome --version
+          echo "✅ Chromedriver version:"
           chromedriver --version
 
       - name: Install Python dependencies
@@ -58,8 +60,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: python-app
-          path: |
-            .
+          path: .
 
   deploy:
     runs-on: ubuntu-latest
