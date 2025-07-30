@@ -15,18 +15,16 @@ from selenium.webdriver.common.by import By
 
 import google.generativeai as genai
 
-# ✅ Configura la clave de Gemini
 api_key = os.getenv("GEMINI_API_KEY_2")
 if not api_key:
     raise ValueError("❌ Falta la variable de entorno: GEMINI_API_KEY_2")
 genai.configure(api_key=api_key)
 
-# ✅ Rutas locales para App Service
+# Rutas
 BIN_DIR = "/home/site/wwwroot/bin"
-CHROME_PATH = f"{BIN_DIR}/google-chrome"
+CHROME_PATH = f"{BIN_DIR}/chrome"
 CHROMEDRIVER_PATH = f"{BIN_DIR}/chromedriver"
 
-# ✅ Instala Google Chrome si no existe
 def install_chrome():
     if not os.path.exists(CHROME_PATH):
         print("🔧 Instalando Google Chrome...")
@@ -40,7 +38,6 @@ def install_chrome():
         shutil.rmtree("chrome-linux64")
         os.remove("chrome.zip")
 
-# ✅ Instala Chromedriver si no existe
 def install_chromedriver():
     if not os.path.exists(CHROMEDRIVER_PATH):
         print("🔧 Instalando Chromedriver...")
@@ -53,11 +50,9 @@ def install_chromedriver():
         shutil.rmtree("chromedriver-linux64")
         os.remove("chromedriver.zip")
 
-# ✅ Preparación de entorno
 install_chrome()
 install_chromedriver()
 
-# 🔍 Scraping con Selenium
 def get_web_papers_selenium(query: str, max_pages: int = 2) -> List[Dict]:
     chrome_options = Options()
     chrome_options.add_argument("--headless=new")
@@ -66,7 +61,11 @@ def get_web_papers_selenium(query: str, max_pages: int = 2) -> List[Dict]:
     chrome_options.binary_location = CHROME_PATH
 
     service = Service(CHROMEDRIVER_PATH)
-    driver = webdriver.Chrome(service=service, options=chrome_options)
+    try:
+        driver = webdriver.Chrome(service=service, options=chrome_options)
+    except Exception as e:
+        raise RuntimeError(f"Error inicializando ChromeDriver: {e}")
+
     driver.implicitly_wait(5)
 
     results = []
@@ -89,7 +88,6 @@ def get_web_papers_selenium(query: str, max_pages: int = 2) -> List[Dict]:
     driver.quit()
     return results
 
-# ✍️ Resumen usando Gemini
 def get_annotated_summary(query: str) -> str:
     papers = get_web_papers_selenium(query)
     if not papers:
