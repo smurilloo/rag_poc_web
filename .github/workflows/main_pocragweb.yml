@@ -39,10 +39,8 @@ jobs:
         with:
           name: python-app
           path: |
-            ./*
+            .
             !venv/
-            !**/__pycache__/
-            !**/*.pyc
 
   deploy:
     runs-on: ubuntu-latest
@@ -60,9 +58,9 @@ jobs:
       - name: Login to Azure
         uses: azure/login@v2
         with:
-          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_20CB67C584F64B0085A170F253FB5B1B }}
-          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_4FF16BF0763D48298334E3B82E0CC43B }}
-          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_8BB320F89F9545C29FC3ADA65D9AB91A }}
+          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_556A3063A5174518B613CD6B3320D74B }}
+          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_B649CB5E848F4CBC875EAF068DFCDDAB }}
+          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_98AF5579E73741BD83308EB3504CE0A6 }}
 
       - name: 'Deploy to Azure Web App'
         uses: azure/webapps-deploy@v3
