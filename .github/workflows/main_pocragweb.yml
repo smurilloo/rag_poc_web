@@ -33,7 +33,7 @@ jobs:
           wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
           sudo apt-get install -y ./google-chrome-stable_current_amd64.deb
 
-            - name: Install compatible ChromeDriver and move to App Service path
+      - name: Install compatible ChromeDriver and move to App Service path
         run: |
           mkdir -p bin
 
