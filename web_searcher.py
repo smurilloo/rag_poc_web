@@ -13,7 +13,6 @@ from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
-from webdriver_manager.chrome import ChromeDriverManager
 
 import google.generativeai as genai
 
@@ -23,35 +22,44 @@ if not api_key:
     raise ValueError("❌ Falta GEMINI_API_KEY_2")
 genai.configure(api_key=api_key)
 
-# ✅ Ruta fija para Chrome y Chromedriver en Azure App Service
+# ✅ Rutas fijas
 CHROME_PATH = "/usr/bin/google-chrome"
 CHROMEDRIVER_PATH = "/usr/bin/chromedriver"
 
-# ✅ Instala Chrome si no existe
-def ensure_chrome_installed():
+# ✅ Instala Google Chrome desde script si no existe
+def install_chrome():
     if not os.path.exists(CHROME_PATH):
         print("🔧 Instalando Google Chrome...")
         subprocess.run(["apt-get", "update"], check=True)
-        subprocess.run(["apt-get", "install", "-y", "wget", "gnupg2", "unzip", "apt-transport-https", "ca-certificates"], check=True)
-        subprocess.run(["wget", "-q", "-O", "-", "https://dl.google.com/linux/linux_signing_key.pub"], stdout=subprocess.PIPE)
-        subprocess.run(["sh", "-c", 'echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google-chrome.list'], check=True)
+        subprocess.run(["apt-get", "install", "-y", "wget", "gnupg2", "unzip", "apt-transport-https", "ca-certificates", "curl"], check=True)
+        subprocess.run([
+            "bash", "-c",
+            "curl -fsSL https://dl.google.com/linux/linux_signing_key.pub | gpg --dearmor -o /usr/share/keyrings/google-chrome.gpg"
+        ], check=True)
+        subprocess.run([
+            "bash", "-c",
+            'echo "deb [arch=amd64 signed-by=/usr/share/keyrings/google-chrome.gpg] http://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google-chrome.list'
+        ], check=True)
         subprocess.run(["apt-get", "update"], check=True)
         subprocess.run(["apt-get", "install", "-y", "google-chrome-stable"], check=True)
 
-# ✅ Instala Chromedriver si no existe
-def ensure_chromedriver_installed():
+# ✅ Instala Chromedriver desde script si no existe
+def install_chromedriver():
     if not os.path.exists(CHROMEDRIVER_PATH):
         print("🔧 Instalando Chromedriver...")
-        subprocess.run(["wget", "https://chromedriver.storage.googleapis.com/124.0.6367.91/chromedriver_linux64.zip", "-O", "chromedriver.zip"], check=True)
+        url = "https://storage.googleapis.com/chrome-for-testing-public/124.0.6367.91/linux64/chromedriver-linux64.zip"
+        subprocess.run(["wget", url, "-O", "chromedriver.zip"], check=True)
         subprocess.run(["unzip", "chromedriver.zip"], check=True)
-        shutil.move("chromedriver", CHROMEDRIVER_PATH)
+        shutil.move("chromedriver-linux64/chromedriver", CHROMEDRIVER_PATH)
         os.chmod(CHROMEDRIVER_PATH, 0o755)
+        shutil.rmtree("chromedriver-linux64")
+        os.remove("chromedriver.zip")
 
-# ✅ Inicializa entorno
-ensure_chrome_installed()
-ensure_chromedriver_installed()
+# ✅ Inicializa entorno completo
+install_chrome()
+install_chromedriver()
 
-# 🔍 Scraping en Google Scholar
+# 🔍 Scraping con Selenium
 def get_web_papers_selenium(query: str, max_pages: int = 2) -> List[Dict]:
     chrome_options = Options()
     chrome_options.add_argument("--headless=new")
@@ -95,28 +103,22 @@ def get_annotated_summary(query: str) -> str:
     )
 
     full_prompt = f"""
-
-"Usando una respuesta corta de máximo 4 párrafos realiza lo siguiente,"
 Analiza los siguientes artículos científicos obtenidos de Google Scholar y genera un resumen claro y estructurado en formato tipo documento:
 
 - Usa 4 párrafos separados.
-- Incorpora títulos y URLs destacados en líneas propias.
-  usando el formato 'url paper - Título del paper (páginas)',
-  Usa las páginas específicas donde aparece la información relevante,
-  ten en cuenta que cada 500 caracteres se pasa de una página a otra,
-  es decir, los primeros 500 caracteres son la página 1, a los 1000 es la página 2,
-  y así sucesivamente.
+- Incorpora títulos y URLs destacados en líneas propias,
+  usando el formato 'url paper - Título del paper (páginas)'.
+- Calcula la página suponiendo 500 caracteres por página.
 - Usa viñetas o numeración para temas comunes o puntos importantes.
 - Añade saltos de línea para facilitar la lectura.
-- No dejes líneas con más de 80 caracteres; usa saltos de línea para ajustar el texto.
+- No dejes líneas con más de 80 caracteres.
 
-Aquí están los artículos a analizar:
+Artículos a analizar:
 
 {prompt}
 """
-
     model = genai.GenerativeModel("models/gemini-2.5-flash")
     response = model.generate_content(full_prompt)
     raw_summary = response.text.strip()
-    wrapped_summary = "\n".join(textwrap.fill(line, width=80) for line in raw_summary.splitlines())
-    return wrapped_summary
+    wrapped = "\n".join(textwrap.fill(line, width=80) for line in raw_summary.splitlines())
+    return wrapped
