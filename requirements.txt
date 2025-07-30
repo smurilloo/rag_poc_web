@@ -7,8 +7,10 @@ PyPDF2
 
 # Vector store & embeddings
 langchain
+langchain-community
 faiss-cpu
 sentence-transformers
+qdrant-client
 
 # Web scraping (manual install of Chrome & Chromedriver)
 selenium
@@ -22,12 +24,10 @@ python-multipart
 
 # Runtime environment & HTTP
 requests
-langchain-community
-python-dotenv
 httpie
 textwrap3
 
-# Azure Blob access
+# Azure Blob Storage & secrets
 azure-storage-blob
 azure-identity
 azure-keyvault-secrets
