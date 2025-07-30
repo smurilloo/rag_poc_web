@@ -19,9 +19,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Python dependencies (sin venv, sin setup-python)
+      - name: Install pip manually
         run: |
+          python3 -m ensurepip --upgrade
           python3 -m pip install --upgrade pip
+
+      - name: Install dependencies
+        run: |
           python3 -m pip install -r requirements.txt
 
       - name: Upload artifact
