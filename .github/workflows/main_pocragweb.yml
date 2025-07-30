@@ -10,7 +10,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     container:
-      image: seleniarm/standalone-chromium:124.0
+      image: zenika/alpine-chrome:with-node
       options: --user 1001
 
     permissions:
@@ -19,16 +19,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install pip manually
+      - name: Instalar dependencias con pip
         run: |
-          python3 -m ensurepip --upgrade
           python3 -m pip install --upgrade pip
-
-      - name: Install dependencies
-        run: |
           python3 -m pip install -r requirements.txt
 
-      - name: Upload artifact
+      - name: Subir artefacto
         uses: actions/upload-artifact@v4
         with:
           name: python-app
@@ -44,19 +40,19 @@ jobs:
       contents: read
 
     steps:
-      - name: Download artifact
+      - name: Descargar artefacto
         uses: actions/download-artifact@v4
         with:
           name: python-app
 
-      - name: Login to Azure
+      - name: Login a Azure
         uses: azure/login@v2
         with:
           client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_23B0BF1561E84071B1118AC0A28CFAA8 }}
           tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_7D0853879A594DCDB325D6865B71305C }}
           subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_38FF3ECAB2184C8A98B0C65C735F6059 }}
 
-      - name: Deploy to Azure Web App
+      - name: Deploy a Azure Web App
         uses: azure/webapps-deploy@v3
         id: deploy-to-webapp
         with:
