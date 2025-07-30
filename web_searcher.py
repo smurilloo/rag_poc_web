@@ -19,31 +19,16 @@ if not api_key:
 
 genai.configure(api_key=api_key)
 
+import undetected_chromedriver as uc
+
 def get_web_papers_selenium(query: str, max_pages: int = 2) -> List[Dict]:
-    base_url = "https://scholar.google.com/scholar"
-
-    # Ruta al chromedriver configurable
-    CHROMEDRIVER_PATH = os.getenv("CHROMEDRIVER_PATH", "/usr/bin/chromedriver")
-
-    # Opciones para entorno headless
-    options = Options()
-    options.add_argument("--headless=new")  # Usa --headless si falla
+    options = uc.ChromeOptions()
+    options.add_argument("--headless=new")
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-dev-shm-usage")
-    options.add_argument("--disable-gpu")
-    options.add_argument("--disable-extensions")
-    options.add_argument("--disable-software-rasterizer")
-    options.add_argument("--disable-setuid-sandbox")
-    options.add_argument("--remote-debugging-port=9222")
-    options.add_argument(
-        "user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-        "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36"
-    )
 
-    # Inicia el navegador
-    service = Service(executable_path=CHROMEDRIVER_PATH)
-    driver = webdriver.Chrome(service=service, options=options)
-    driver.implicitly_wait(5)  # Espera implícita
+    driver = uc.Chrome(options=options)
+    driver.implicitly_wait(5)
 
     results = []
     for page in range(max_pages):
