@@ -1,7 +1,3 @@
-# Este código busca artículos científicos en Google Scholar usando web Scrapping con Selenium,
-# extrae títulos, resúmenes y enlaces, y luego genera un resumen claro y organizado
-# con ayuda de una inteligencia artificial para facilitar la comprensión del contenido.
-
 import os
 import textwrap
 from typing import List, Dict
@@ -13,15 +9,14 @@ from selenium.webdriver.common.by import By
 
 import google.generativeai as genai
 
-# ✅ Cargar la API Key de Gemini desde variables de entorno
+# ✅ Validación de clave de API Gemini
 api_key = os.getenv("GEMINI_API_KEY_2")
 if not api_key:
     raise ValueError("❌ Falta la variable de entorno: GEMINI_API_KEY_2")
-
 genai.configure(api_key=api_key)
 
 
-# 🔍 Scraping de artículos en Google Scholar usando Selenium
+# 🔍 Scraping con Selenium en entorno Azure
 def get_web_papers_selenium(query: str, max_pages: int = 2) -> List[Dict]:
     chrome_options = Options()
     chrome_options.add_argument("--headless=new")
@@ -30,9 +25,12 @@ def get_web_papers_selenium(query: str, max_pages: int = 2) -> List[Dict]:
     chrome_options.add_argument("--disable-gpu")
     chrome_options.add_argument("--remote-debugging-port=9222")
 
-    # ✅ Rutas explícitas para Azure App Service
+    # ✅ Rutas instaladas manualmente vía GitHub Actions o Kudu
     chrome_bin_path = "/home/site/wwwroot/bin/google-chrome"
     chromedriver_path = "/home/site/wwwroot/bin/chromedriver"
+
+    if not os.path.exists(chrome_bin_path) or not os.path.exists(chromedriver_path):
+        raise FileNotFoundError("❌ Chrome o ChromeDriver no están instalados en las rutas esperadas.")
 
     chrome_options.binary_location = chrome_bin_path
     service = Service(executable_path=chromedriver_path)
@@ -51,7 +49,6 @@ def get_web_papers_selenium(query: str, max_pages: int = 2) -> List[Dict]:
         try:
             driver.get(search_url)
             articles = driver.find_elements(By.CSS_SELECTOR, "div.gs_ri")
-
             for art in articles:
                 try:
                     title_elem = art.find_element(By.CSS_SELECTOR, "h3 a")
