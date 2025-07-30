@@ -28,9 +28,15 @@ def get_web_papers_selenium(query: str, max_pages: int = 2) -> List[Dict]:
     chrome_options.add_argument("--no-sandbox")
     chrome_options.add_argument("--disable-dev-shm-usage")
 
-    # ✅ En la nueva imagen base, no es necesario setear binary_location ni chromedriver manual
+    # ✅ Rutas explícitas para Azure App Service
+    chrome_bin_path = "/home/site/wwwroot/bin/google-chrome"
+    chromedriver_path = "/home/site/wwwroot/bin/chromedriver"
+
+    chrome_options.binary_location = chrome_bin_path
+    service = Service(executable_path=chromedriver_path)
+
     try:
-        driver = webdriver.Chrome(options=chrome_options)
+        driver = webdriver.Chrome(service=service, options=chrome_options)
     except Exception as e:
         raise RuntimeError(f"Error inicializando ChromeDriver: {e}")
 
