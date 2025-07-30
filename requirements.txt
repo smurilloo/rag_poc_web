@@ -1,36 +1,36 @@
 # Core web app framework
-fastapi               # Framework web moderno para APIs
-uvicorn               # Servidor ASGI para correr FastAPI
+fastapi
+uvicorn
 
 # PDF handling
-PyPDF2                # Lectura y manipulación de archivos PDF
+PyPDF2
 
 # Vector store & embeddings
-langchain             # Librería para procesamiento y manejo de texto con embeddings
-faiss-cpu             # Motor para búsqueda rápida en vectores (vector search)
-sentence-transformers # Modelos para generar embeddings semánticos de texto
+langchain
+faiss-cpu
+sentence-transformers
 
-# Web scraping & browser automation
-selenium                # Automatización de navegador para scraping dinámico
-webdriver-manager       # Manejo automático de drivers para Selenium        
+# Web scraping (manual install of Chrome & Chromedriver)
+selenium
+chromedriver-autoinstaller
 
 # Google Gemini (Generative AI)
-google-generativeai   # Cliente para la API generativa de Google Gemini
+google-generativeai
 
 # Static files & uploads
-python-multipart      # Manejo de formularios multipart (subida de archivos)
+python-multipart
 
 # Runtime environment & HTTP
-requests              # Cliente HTTP para hacer peticiones
-langchain-community   # Extensiones y utilidades comunitarias para LangChain
-
-qdrant-client    # BD vectorial
-sentence-transformers
+requests
+langchain-community
 python-dotenv
-#pywin32
 httpie
+textwrap3
+
+# Azure Blob access
 azure-storage-blob
 azure-identity
 azure-keyvault-secrets
-textwrap3
+
+# Fixes for HTTPS / SSL issues
 pyopenssl
