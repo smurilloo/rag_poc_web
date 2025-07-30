@@ -20,7 +20,7 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Install system dependencies and Chrome
+      - name: Install system dependencies and Google Chrome
         run: |
           sudo apt-get update
           sudo apt-get install -y wget unzip jq \
@@ -39,10 +39,13 @@ jobs:
 
           CHROME_VERSION=$(google-chrome --version | grep -oP "\d+\.\d+\.\d+")
           CHROMEDRIVER_URL=$(curl -s "https://googlechromelabs.github.io/chrome-for-testing/last-known-good-versions-with-downloads.json" | \
-            jq -r ".channels.Stable.downloads.chromedriver[] | select(.platform == \"linux64\") | select(.version | startswith(\"$CHROME_VERSION\")) | .url" | head -n 1)
+            jq -r --arg ver "$CHROME_VERSION" '
+              .channels.Stable.downloads.chromedriver[]
+              | select(.platform == "linux64" and (.version | tostring | startswith($ver)))
+              | .url' | head -n 1)
 
           if [ -z "$CHROMEDRIVER_URL" ]; then
-            echo "Error: No matching ChromeDriver found for Chrome version $CHROME_VERSION"
+            echo "❌ Error: No matching ChromeDriver found for Chrome version $CHROME_VERSION"
             exit 1
           fi
 
@@ -51,7 +54,6 @@ jobs:
           mv chromedriver-linux64/chromedriver bin/chromedriver
           chmod +x bin/chromedriver
 
-          # Copiar chrome al path requerido por Selenium
           cp $(which google-chrome) bin/google-chrome
           chmod +x bin/google-chrome
 
