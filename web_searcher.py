@@ -6,7 +6,6 @@ import os
 import shutil
 import subprocess
 import textwrap
-import time
 from typing import List, Dict
 
 from selenium import webdriver
@@ -16,22 +15,28 @@ from selenium.webdriver.common.by import By
 
 import google.generativeai as genai
 
-# ✅ Configura Gemini API key
+# ✅ Configura la clave de Gemini
 api_key = os.getenv("GEMINI_API_KEY_2")
 if not api_key:
-    raise ValueError("❌ Falta GEMINI_API_KEY_2")
+    raise ValueError("❌ Falta la variable de entorno: GEMINI_API_KEY_2")
 genai.configure(api_key=api_key)
 
 # ✅ Rutas fijas
 CHROME_PATH = "/usr/bin/google-chrome"
 CHROMEDRIVER_PATH = "/usr/bin/chromedriver"
 
-# ✅ Instala Google Chrome desde script si no existe
+# ✅ Instala Google Chrome si no existe
 def install_chrome():
     if not os.path.exists(CHROME_PATH):
         print("🔧 Instalando Google Chrome...")
-        subprocess.run(["apt-get", "update"], check=True)
-        subprocess.run(["apt-get", "install", "-y", "wget", "gnupg2", "unzip", "apt-transport-https", "ca-certificates", "curl"], check=True)
+        subprocess.run([
+            "apt-get", "update"
+        ], check=True)
+        subprocess.run([
+            "apt-get", "install", "-y",
+            "wget", "gnupg2", "unzip", "apt-transport-https",
+            "ca-certificates", "curl"
+        ], check=True)
         subprocess.run([
             "bash", "-c",
             "curl -fsSL https://dl.google.com/linux/linux_signing_key.pub | gpg --dearmor -o /usr/share/keyrings/google-chrome.gpg"
@@ -40,10 +45,14 @@ def install_chrome():
             "bash", "-c",
             'echo "deb [arch=amd64 signed-by=/usr/share/keyrings/google-chrome.gpg] http://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google-chrome.list'
         ], check=True)
-        subprocess.run(["apt-get", "update"], check=True)
-        subprocess.run(["apt-get", "install", "-y", "google-chrome-stable"], check=True)
+        subprocess.run([
+            "apt-get", "update"
+        ], check=True)
+        subprocess.run([
+            "apt-get", "install", "-y", "google-chrome-stable"
+        ], check=True)
 
-# ✅ Instala Chromedriver desde script si no existe
+# ✅ Instala Chromedriver si no existe
 def install_chromedriver():
     if not os.path.exists(CHROMEDRIVER_PATH):
         print("🔧 Instalando Chromedriver...")
@@ -55,7 +64,7 @@ def install_chromedriver():
         shutil.rmtree("chromedriver-linux64")
         os.remove("chromedriver.zip")
 
-# ✅ Inicializa entorno completo
+# ✅ Preparación de entorno
 install_chrome()
 install_chromedriver()
 
@@ -76,7 +85,6 @@ def get_web_papers_selenium(query: str, max_pages: int = 2) -> List[Dict]:
         start = page * 10
         search_url = f"https://scholar.google.com/scholar?q={query.replace(' ', '+')}&start={start}"
         driver.get(search_url)
-
         articles = driver.find_elements(By.CSS_SELECTOR, "div.gs_ri")
         for art in articles:
             try:
