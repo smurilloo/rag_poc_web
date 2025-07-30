@@ -10,7 +10,8 @@ jobs:
   build:
     runs-on: ubuntu-latest
     container:
-      image: zenika/alpine-chrome:with-node  # ✅ Imagen con Chrome, Chromedriver y librerías ya instaladas
+      image: zenika/alpine-chrome:with-node  # ✅ Imagen con Chrome y Chromedriver
+      options: --user 1001                   # ✅ Ajuste agregado para evitar errores de permisos
 
     permissions:
       contents: read
