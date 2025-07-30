@@ -11,8 +11,8 @@ faiss-cpu             # Motor para búsqueda rápida en vectores (vector search)
 sentence-transformers # Modelos para generar embeddings semánticos de texto
 
 # Web scraping & browser automation
-selenium              # Automatización de navegador para scraping dinámico
-webdriver-manager     # Manejo automático de drivers para Selenium
+selenium==4.21.0  # Automatización de navegador para scraping dinámico
+webdriver-manager==4.0.1        # Manejo automático de drivers para Selenium        
 
 # Google Gemini (Generative AI)
 google-generativeai   # Cliente para la API generativa de Google Gemini
