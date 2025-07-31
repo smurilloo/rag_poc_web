@@ -12,16 +12,14 @@ from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 from selenium.common.exceptions import WebDriverException
 
-# --- API KEY GEMINI ---
 api_key = os.getenv("GEMINI_API_KEY_2")
 if not api_key:
     raise ValueError("❌ Falta la variable de entorno: GEMINI_API_KEY_2")
 genai.configure(api_key=api_key)
 
-# --- DRIVER HEADLESS ---
 def create_chrome_driver():
     bin_dir = "/home/site/wwwroot/bin"
-    chrome_path = os.path.join(bin_dir, "google-chrome")
+    chrome_path = os.path.join(bin_dir, "chrome")  # ✅ corregido
     chromedriver_path = os.path.join(bin_dir, "chromedriver")
 
     if not os.path.isfile(chrome_path) or not os.path.isfile(chromedriver_path):
@@ -47,7 +45,6 @@ def create_chrome_driver():
     except WebDriverException as e:
         raise RuntimeError(f"❌ Error inicializando ChromeDriver: {e}")
 
-# --- SCRAPING DE SCHOLAR ---
 def get_web_papers_selenium(query: str, max_pages: int = 2) -> List[Dict]:
     driver = create_chrome_driver()
     driver.implicitly_wait(5)
@@ -56,11 +53,9 @@ def get_web_papers_selenium(query: str, max_pages: int = 2) -> List[Dict]:
     for page in range(max_pages):
         start = page * 10
         search_url = f"https://scholar.google.com/scholar?q={query.replace(' ', '+')}&start={start}"
-
         try:
             driver.get(search_url)
             articles = driver.find_elements(By.CSS_SELECTOR, "div.gs_ri")
-
             for art in articles:
                 try:
                     title_elem = art.find_element(By.CSS_SELECTOR, "h3 a")
@@ -75,7 +70,6 @@ def get_web_papers_selenium(query: str, max_pages: int = 2) -> List[Dict]:
             print(f"⚠️ Error en página {page + 1}: {e}")
             continue
 
-    # Limpieza
     try:
         driver.quit()
     finally:
@@ -84,7 +78,6 @@ def get_web_papers_selenium(query: str, max_pages: int = 2) -> List[Dict]:
 
     return results
 
-# --- RESUMEN CON GEMINI ---
 def get_annotated_summary(query: str) -> str:
     papers = get_web_papers_selenium(query)
     if not papers:
