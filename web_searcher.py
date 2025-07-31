@@ -21,19 +21,9 @@ genai.configure(api_key=api_key)
 
 # === Forzar versión compatible de chromedriver ===
 def force_chromedriver_compatible_version(chrome_version_major: str = "124"):
-    import chromedriver_autoinstaller
-
-    # Ruta de instalación automática
-    chromedriver_dir = os.path.join(
-        chromedriver_autoinstaller.utils.get_installed_chromedriver_path(),
-        "..", "..", "..", ".."
-    )
-    chromedriver_dir = os.path.abspath(chromedriver_dir)
-
-    # Forzar instalación específica
     compatible_version = "124.0.6367.207"
     try:
-        print(f"✅ Instalando ChromeDriver compatible con Chrome {chrome_version_major}...")
+        print(f"✅ Descargando ChromeDriver compatible con Chrome {chrome_version_major}...")
         subprocess.run(
             ["wget", f"https://edgedl.me.gvt1.com/edgedl/chrome/chrome-for-testing/{compatible_version}/linux64/chromedriver-linux64.zip", "-O", "driver.zip"],
             check=True
@@ -41,13 +31,12 @@ def force_chromedriver_compatible_version(chrome_version_major: str = "124"):
         subprocess.run(["unzip", "-o", "driver.zip", "-d", "driver_extracted"], check=True)
         shutil.move("driver_extracted/chromedriver-linux64/chromedriver", "/usr/local/bin/chromedriver")
         os.chmod("/usr/local/bin/chromedriver", 0o755)
-        print("✅ ChromeDriver forzado a versión compatible.")
+        print("✅ ChromeDriver instalado en /usr/local/bin/chromedriver.")
     except Exception as e:
-        print(f"⚠️ Error forzando ChromeDriver: {e}")
+        print(f"⚠️ Error instalando ChromeDriver: {e}")
 
 # === Inicializa ChromeDriver (headless) ===
 def create_chrome_driver():
-    # Validar versión antes de iniciar el navegador
     force_chromedriver_compatible_version()
 
     chrome_options = Options()
@@ -58,17 +47,16 @@ def create_chrome_driver():
     chrome_options.add_argument("--disable-extensions")
     chrome_options.add_argument("--remote-debugging-port=9222")
 
-    # ⚙️ user-data-dir temporal único
     temp_user_data_dir = tempfile.mkdtemp()
     chrome_options.add_argument(f"--user-data-dir={temp_user_data_dir}")
 
-    # Si estás usando binario de Chrome específico (Azure App Service)
     chrome_bin_path = "/home/site/wwwroot/bin/google-chrome"
     if os.path.isfile(chrome_bin_path):
         chrome_options.binary_location = chrome_bin_path
 
     try:
-        return webdriver.Chrome(options=chrome_options)
+        service = Service("/usr/local/bin/chromedriver")
+        return webdriver.Chrome(service=service, options=chrome_options)
     except WebDriverException as e:
         raise RuntimeError(f"❌ Error inicializando ChromeDriver: {e}")
 
