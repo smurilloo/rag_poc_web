@@ -2,10 +2,12 @@
 # y devuelve una respuesta clara usando la información encontrada, recordando conversaciones previas ..
 
 import os
+import traceback
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pathlib import Path
+
 from memory_keeper import MemoryKeeper
 from retriever import load_pdfs_azure
 from synthesizer import synthesize_answer
@@ -33,11 +35,16 @@ memory_keeper = MemoryKeeper()
 
 @app.on_event("startup")
 async def startup_event():
-    ensure_collection()  
+    try:
+        ensure_collection()
+    except Exception as e:
+        print(f"[startup error] No se pudo inicializar la colección: {e}")
 
 @app.get("/", response_class=HTMLResponse)
 async def root():
     html_path = Path(__file__).parent / "static" / "index.html"
+    if not html_path.exists():
+        return HTMLResponse(content="<h1>Interfaz no encontrada.</h1>", status_code=404)
     with open(html_path, "r", encoding="utf-8") as f:
         return HTMLResponse(content=f.read())
 
@@ -50,13 +57,22 @@ async def ask(request: Request):
         return JSONResponse(content={"answer": "Por favor ingresa una consulta válida."}, status_code=400)
 
     try:
+        # Carga PDFs desde Azure
         pdf_texts_by_pages, pdf_metadata = load_pdfs_azure()
+        
+        # Scrapeo web desde Google Scholar
         web_papers = get_web_papers_selenium(question)
+        
+        # Vectorización temporal de los documentos
         cleanup_collection(limit=20)
         index_pdf_chunks(pdf_texts_by_pages)
         index_web_papers(web_papers)
+
+        # Generación de respuesta con contexto
         memory = memory_keeper.get_context()
         answer = synthesize_answer(question, pdf_texts_by_pages, pdf_metadata, memory, web_papers)
+
+        # Guardar memoria y limpiar
         memory_keeper.remember(question, answer)
         delete_collection()
 
@@ -64,7 +80,10 @@ async def ask(request: Request):
 
     except Exception as e:
         return JSONResponse(
-            content={"answer": f"Error procesando la consulta: {str(e)}"},
+            content={
+                "answer": f"Error procesando la consulta: {str(e)}",
+                "trace": traceback.format_exc()
+            },
             status_code=500
         )
 
