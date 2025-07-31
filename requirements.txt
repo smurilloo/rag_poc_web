@@ -13,8 +13,7 @@ sentence-transformers
 qdrant-client
 
 # Web scraping (manual install of Chrome & Chromedriver)
-selenium
-chromedriver-autoinstaller
+selenium==4.16.0
 
 # Google Gemini (Generative AI)
 google-generativeai
