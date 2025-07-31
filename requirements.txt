@@ -14,6 +14,7 @@ qdrant-client
 
 # Web scraping (manual install of Chrome & Chromedriver)
 selenium==4.16.0
+pyvirtualdisplay  # opcional pero recomendado para headless
 
 # Google Gemini (Generative AI)
 google-generativeai
