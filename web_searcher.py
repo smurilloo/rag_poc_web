@@ -19,25 +19,36 @@ if not api_key:
     raise ValueError("❌ Falta la variable de entorno: GEMINI_API_KEY_2")
 genai.configure(api_key=api_key)
 
-# === Forzar versión compatible de chromedriver ===
-def force_chromedriver_compatible_version(chrome_version_major: str = "124"):
+# === Forzar instalación de ChromeDriver en ruta válida ===
+def install_chromedriver_compatible_version(chrome_version_major: str = "124"):
     compatible_version = "124.0.6367.207"
+    chromedriver_url = (
+        f"https://edgedl.me.gvt1.com/edgedl/chrome/chrome-for-testing/"
+        f"{compatible_version}/linux64/chromedriver-linux64.zip"
+    )
+    dest_dir = "/home/site/wwwroot/bin"
+    os.makedirs(dest_dir, exist_ok=True)
+
     try:
         print(f"✅ Descargando ChromeDriver compatible con Chrome {chrome_version_major}...")
         subprocess.run(
-            ["wget", f"https://edgedl.me.gvt1.com/edgedl/chrome/chrome-for-testing/{compatible_version}/linux64/chromedriver-linux64.zip", "-O", "driver.zip"],
-            check=True
+            ["wget", chromedriver_url, "-O", "chromedriver.zip"], check=True
         )
-        subprocess.run(["unzip", "-o", "driver.zip", "-d", "driver_extracted"], check=True)
-        shutil.move("driver_extracted/chromedriver-linux64/chromedriver", "/usr/local/bin/chromedriver")
-        os.chmod("/usr/local/bin/chromedriver", 0o755)
-        print("✅ ChromeDriver instalado en /usr/local/bin/chromedriver.")
+        subprocess.run(["unzip", "-o", "chromedriver.zip", "-d", "chromedriver_extracted"], check=True)
+        chromedriver_src = "chromedriver_extracted/chromedriver-linux64/chromedriver"
+        chromedriver_dest = os.path.join(dest_dir, "chromedriver")
+        shutil.move(chromedriver_src, chromedriver_dest)
+        os.chmod(chromedriver_dest, 0o755)
+        print(f"✅ ChromeDriver instalado en {chromedriver_dest}")
     except Exception as e:
         print(f"⚠️ Error instalando ChromeDriver: {e}")
 
 # === Inicializa ChromeDriver (headless) ===
 def create_chrome_driver():
-    force_chromedriver_compatible_version()
+    install_chromedriver_compatible_version()
+
+    chrome_bin_path = "/home/site/wwwroot/bin/google-chrome"
+    chromedriver_path = "/home/site/wwwroot/bin/chromedriver"
 
     chrome_options = Options()
     chrome_options.add_argument("--headless=new")
@@ -50,12 +61,11 @@ def create_chrome_driver():
     temp_user_data_dir = tempfile.mkdtemp()
     chrome_options.add_argument(f"--user-data-dir={temp_user_data_dir}")
 
-    chrome_bin_path = "/home/site/wwwroot/bin/google-chrome"
     if os.path.isfile(chrome_bin_path):
         chrome_options.binary_location = chrome_bin_path
 
     try:
-        service = Service("/usr/local/bin/chromedriver")
+        service = Service(executable_path=chromedriver_path)
         return webdriver.Chrome(service=service, options=chrome_options)
     except WebDriverException as e:
         raise RuntimeError(f"❌ Error inicializando ChromeDriver: {e}")
