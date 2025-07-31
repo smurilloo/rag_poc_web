@@ -3,7 +3,6 @@ import textwrap
 import tempfile
 import shutil
 from typing import List, Dict
-import subprocess
 
 import google.generativeai as genai
 
@@ -19,56 +18,14 @@ if not api_key:
     raise ValueError("❌ Falta la variable de entorno: GEMINI_API_KEY_2")
 genai.configure(api_key=api_key)
 
-# --- INSTALACIÓN DE CHROME Y CHROMEDRIVER ---
-def install_chrome_and_chromedriver():
-    bin_dir = "/home/site/wwwroot/bin"
-    os.makedirs(bin_dir, exist_ok=True)
-
-    chrome_path = os.path.join(bin_dir, "google-chrome")
-    chromedriver_path = os.path.join(bin_dir, "chromedriver")
-
-    if os.path.isfile(chrome_path) and os.path.isfile(chromedriver_path):
-        print("✅ Chrome y ChromeDriver ya están instalados.")
-        return
-
-    try:
-        subprocess.run(["apt", "update"], check=True)
-        subprocess.run([
-            "apt", "install", "-y",
-            "wget", "unzip", "fonts-liberation", "libnss3", "libatk-bridge2.0-0",
-            "libxss1", "libasound2", "libgbm1", "libgtk-3-0", "libx11-xcb1",
-            "libxcomposite1", "libxdamage1", "libxrandr2", "libu2f-udev"
-        ], check=True)
-    except Exception as e:
-        print(f"⚠️ Error instalando dependencias: {e}")
-
-    try:
-        # Chrome
-        chrome_url = "https://storage.googleapis.com/chrome-for-testing-public/124.0.6367.207/linux64/chrome-linux64.zip"
-        subprocess.run(["wget", chrome_url, "-O", "chrome.zip"], check=True)
-        subprocess.run(["unzip", "-o", "chrome.zip", "-d", bin_dir], check=True)
-        os.replace(os.path.join(bin_dir, "chrome-linux64", "chrome"), chrome_path)
-        os.chmod(chrome_path, 0o755)
-    except Exception as e:
-        print(f"⚠️ Error instalando Chrome: {e}")
-
-    try:
-        # ChromeDriver
-        driver_url = "https://storage.googleapis.com/chrome-for-testing-public/124.0.6367.207/linux64/chromedriver-linux64.zip"
-        subprocess.run(["wget", driver_url, "-O", "chromedriver.zip"], check=True)
-        subprocess.run(["unzip", "-o", "chromedriver.zip", "-d", bin_dir], check=True)
-        os.replace(os.path.join(bin_dir, "chromedriver-linux64", "chromedriver"), chromedriver_path)
-        os.chmod(chromedriver_path, 0o755)
-    except Exception as e:
-        print(f"⚠️ Error instalando ChromeDriver: {e}")
-
 # --- DRIVER HEADLESS ---
 def create_chrome_driver():
-    install_chrome_and_chromedriver()
-
     bin_dir = "/home/site/wwwroot/bin"
     chrome_path = os.path.join(bin_dir, "google-chrome")
     chromedriver_path = os.path.join(bin_dir, "chromedriver")
+
+    if not os.path.isfile(chrome_path) or not os.path.isfile(chromedriver_path):
+        raise RuntimeError("❌ Chrome o ChromeDriver no están instalados en el directorio bin")
 
     chrome_options = Options()
     chrome_options.add_argument("--headless=new")
@@ -80,9 +37,7 @@ def create_chrome_driver():
 
     temp_user_data_dir = tempfile.mkdtemp()
     chrome_options.add_argument(f"--user-data-dir={temp_user_data_dir}")
-
-    if os.path.isfile(chrome_path):
-        chrome_options.binary_location = chrome_path
+    chrome_options.binary_location = chrome_path
 
     try:
         service = Service(executable_path=chromedriver_path)
@@ -110,7 +65,7 @@ def get_web_papers_selenium(query: str, max_pages: int = 2) -> List[Dict]:
                 try:
                     title_elem = art.find_element(By.CSS_SELECTOR, "h3 a")
                     title = title_elem.text.strip()
-                    url = title_elem.getAttribute("href")
+                    url = title_elem.get_attribute("href")
                     snippet_elem = art.find_elements(By.CLASS_NAME, "gs_rs")
                     snippet = snippet_elem[0].text.strip() if snippet_elem else "No hay resumen disponible."
                     results.append({"title": title, "url": url, "snippet": snippet})
