@@ -3,6 +3,7 @@ import textwrap
 import tempfile
 import shutil
 from typing import List, Dict
+import subprocess
 
 import google.generativeai as genai
 
@@ -11,41 +12,47 @@ from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 from selenium.common.exceptions import WebDriverException
-import subprocess
 
-# === Setup Gemini ===
 api_key = os.getenv("GEMINI_API_KEY_2")
 if not api_key:
     raise ValueError("❌ Falta la variable de entorno: GEMINI_API_KEY_2")
 genai.configure(api_key=api_key)
 
-# === Forzar instalación de ChromeDriver en ruta válida ===
-def install_chromedriver_compatible_version(chrome_version_major: str = "124"):
-    compatible_version = "124.0.6367.207"
-    chromedriver_url = (
-        f"https://edgedl.me.gvt1.com/edgedl/chrome/chrome-for-testing/"
-        f"{compatible_version}/linux64/chromedriver-linux64.zip"
-    )
-    dest_dir = "/home/site/wwwroot/bin"
-    os.makedirs(dest_dir, exist_ok=True)
+def install_chrome_and_chromedriver():
+    bin_dir = "/home/site/wwwroot/bin"
+    os.makedirs(bin_dir, exist_ok=True)
 
     try:
-        print(f"✅ Descargando ChromeDriver compatible con Chrome {chrome_version_major}...")
-        subprocess.run(
-            ["wget", chromedriver_url, "-O", "chromedriver.zip"], check=True
-        )
-        subprocess.run(["unzip", "-o", "chromedriver.zip", "-d", "chromedriver_extracted"], check=True)
-        chromedriver_src = "chromedriver_extracted/chromedriver-linux64/chromedriver"
-        chromedriver_dest = os.path.join(dest_dir, "chromedriver")
-        shutil.move(chromedriver_src, chromedriver_dest)
-        os.chmod(chromedriver_dest, 0o755)
-        print(f"✅ ChromeDriver instalado en {chromedriver_dest}")
+        subprocess.run(["apt", "update"], check=True)
+        subprocess.run([
+            "apt", "install", "-y",
+            "wget", "unzip", "fonts-liberation", "libnss3", "libatk-bridge2.0-0",
+            "libxss1", "libasound2", "libgbm1", "libgtk-3-0", "libx11-xcb1",
+            "libxcomposite1", "libxdamage1", "libxrandr2", "libu2f-udev"
+        ], check=True)
+    except Exception as e:
+        print(f"⚠️ Error instalando dependencias: {e}")
+
+    try:
+        chrome_url = "https://storage.googleapis.com/chrome-for-testing-public/124.0.6367.207/linux64/chrome-linux64.zip"
+        subprocess.run(["wget", chrome_url, "-O", "chrome.zip"], check=True)
+        subprocess.run(["unzip", "-o", "chrome.zip", "-d", bin_dir], check=True)
+        os.rename(f"{bin_dir}/chrome-linux64/chrome", f"{bin_dir}/google-chrome")
+        os.chmod(f"{bin_dir}/google-chrome", 0o755)
+    except Exception as e:
+        print(f"⚠️ Error instalando Chrome: {e}")
+
+    try:
+        chromedriver_url = "https://storage.googleapis.com/chrome-for-testing-public/124.0.6367.207/linux64/chromedriver-linux64.zip"
+        subprocess.run(["wget", chromedriver_url, "-O", "chromedriver.zip"], check=True)
+        subprocess.run(["unzip", "-o", "chromedriver.zip", "-d", bin_dir], check=True)
+        os.rename(f"{bin_dir}/chromedriver-linux64/chromedriver", f"{bin_dir}/chromedriver")
+        os.chmod(f"{bin_dir}/chromedriver", 0o755)
     except Exception as e:
         print(f"⚠️ Error instalando ChromeDriver: {e}")
 
-# === Inicializa ChromeDriver (headless) ===
 def create_chrome_driver():
-    install_chromedriver_compatible_version()
+    install_chrome_and_chromedriver()
 
     chrome_bin_path = "/home/site/wwwroot/bin/google-chrome"
     chromedriver_path = "/home/site/wwwroot/bin/chromedriver"
@@ -70,7 +77,6 @@ def create_chrome_driver():
     except WebDriverException as e:
         raise RuntimeError(f"❌ Error inicializando ChromeDriver: {e}")
 
-# 🔍 Scraping en Google Scholar
 def get_web_papers_selenium(query: str, max_pages: int = 2) -> List[Dict]:
     driver = create_chrome_driver()
     driver.implicitly_wait(5)
@@ -91,7 +97,6 @@ def get_web_papers_selenium(query: str, max_pages: int = 2) -> List[Dict]:
                     url = title_elem.get_attribute("href")
                     snippet_elem = art.find_elements(By.CLASS_NAME, "gs_rs")
                     snippet = snippet_elem[0].text.strip() if snippet_elem else "No hay resumen disponible."
-
                     results.append({"title": title, "url": url, "snippet": snippet})
                 except Exception:
                     continue
@@ -102,7 +107,6 @@ def get_web_papers_selenium(query: str, max_pages: int = 2) -> List[Dict]:
     driver.quit()
     return results
 
-# ✍️ Resumen anotado con Gemini
 def get_annotated_summary(query: str) -> str:
     papers = get_web_papers_selenium(query)
     if not papers:
