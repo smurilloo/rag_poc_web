@@ -34,3 +34,4 @@ azure-keyvault-secrets
 
 # Fixes for HTTPS / SSL issues
 pyopenssl
+jq
