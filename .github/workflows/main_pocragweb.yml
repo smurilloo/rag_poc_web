@@ -33,17 +33,19 @@ jobs:
       - name: Download and install Chrome + Chromedriver
         run: |
           mkdir -p bin
-          VERSION=$(curl -sSL https://googlechromelabs.github.io/chrome-for-testing/last-known-good-versions-with-downloads.json | grep -oP '"version": "\K[^"]+')
+          VERSION=$(curl -sSL https://googlechromelabs.github.io/chrome-for-testing/last-known-good-versions-with-downloads.json | jq -r '.channels.Stable.version')
 
           wget -q https://storage.googleapis.com/chrome-for-testing-public/$VERSION/linux64/chrome-linux64.zip
           wget -q https://storage.googleapis.com/chrome-for-testing-public/$VERSION/linux64/chromedriver-linux64.zip
           unzip -q chrome-linux64.zip
           unzip -q chromedriver-linux64.zip
 
-          mv chrome-linux64 bin/chrome
-          mv chromedriver-linux64/chromedriver bin/chromedriver
-          chmod +x bin/chromedriver
-          ln -sf /home/site/wwwroot/bin/chrome/chrome bin/chromium
+          mv chrome-linux64/* bin/
+          mv chromedriver-linux64/chromedriver bin/
+          chmod +x bin/chromedriver bin/chrome
+
+          # Evita usar rutas absolutas no válidas en GitHub Actions
+          ln -sf bin/chrome bin/chromium
 
       - name: Upload artifact for deployment
         uses: actions/upload-artifact@v4
