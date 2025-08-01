@@ -1,111 +1,102 @@
-import os
-import textwrap
-import tempfile
-import shutil
-from typing import List, Dict
+# Este código busca artículos científicos en Google Scholar usando web Scrapping con Selenium,
+# extrae títulos, resúmenes y enlaces, y luego genera un resumen claro y organizado
+# con ayuda de una inteligencia artificial para facilitar la comprensión del contenido.
 
 import google.generativeai as genai
-
+from typing import List, Dict
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
-from selenium.common.exceptions import WebDriverException
-from webdriver_manager.chrome import ChromeDriverManager
-from selenium import webdriver
-import tempfile
-import shutil
+import time
+import textwrap
+import os
 
+
+# Configuración desde variables de entorno
 api_key = os.getenv("GEMINI_API_KEY_2")
 if not api_key:
-    raise ValueError("❌ Falta la variable de entorno: GEMINI_API_KEY_2")
+    raise ValueError("❌ Falta GEMINI_API_KEY_2")
+
 genai.configure(api_key=api_key)
 
-
-def create_chrome_driver():
-    chrome_options = Options()
-    chrome_options.add_argument("--headless=new")
-    chrome_options.add_argument("--no-sandbox")
-    chrome_options.add_argument("--disable-dev-shm-usage")
-    chrome_options.add_argument("--disable-gpu")
-    chrome_options.add_argument("--disable-extensions")
-    chrome_options.add_argument("--remote-debugging-port=9222")
-
-    # Crear un directorio temporal para los datos de usuario
-    temp_user_data_dir = tempfile.mkdtemp()
-    chrome_options.add_argument(f"--user-data-dir={temp_user_data_dir}")
-
-    # Usar webdriver-manager para manejar la descarga de ChromeDriver
-    service = Service(ChromeDriverManager().install())
-    driver = webdriver.Chrome(service=service, options=chrome_options)
-    driver.temp_user_data_dir = temp_user_data_dir
-    return driver
-    except WebDriverException as e:
-        raise RuntimeError(f"❌ Error inicializando ChromeDriver: {e}")
-
 def get_web_papers_selenium(query: str, max_pages: int = 2) -> List[Dict]:
-    driver = create_chrome_driver()
-    driver.implicitly_wait(5)
+    base_url = "https://scholar.google.com/scholar"
+
+    # Opciones para entorno headless
+    options = Options()
+    options.add_argument("--headless=new")
+    options.add_argument("--no-sandbox")
+    options.add_argument("--disable-dev-shm-usage")
+    options.add_argument("--disable-gpu")
+    options.add_argument("--disable-extensions")
+    options.add_argument("--disable-software-rasterizer")
+    options.add_argument("--disable-setuid-sandbox")
+    options.add_argument("--remote-debugging-port=9222")
+
+    # Inicia el navegador con las opciones headless
+    driver = webdriver.Chrome(options=options)
 
     results = []
     for page in range(max_pages):
         start = page * 10
-        search_url = f"https://scholar.google.com/scholar?q={query.replace(' ', '+')}&start={start}"
-        try:
-            driver.get(search_url)
-            articles = driver.find_elements(By.CSS_SELECTOR, "div.gs_ri")
-            for art in articles:
-                try:
-                    title_elem = art.find_element(By.CSS_SELECTOR, "h3 a")
-                    title = title_elem.text.strip()
-                    url = title_elem.get_attribute("href")
-                    snippet_elem = art.find_elements(By.CLASS_NAME, "gs_rs")
-                    snippet = snippet_elem[0].text.strip() if snippet_elem else "No hay resumen disponible."
-                    results.append({"title": title, "url": url, "snippet": snippet})
-                except Exception:
-                    continue
-        except Exception as e:
-            print(f"⚠️ Error en página {page + 1}: {e}")
-            continue
+        search_url = f"{base_url}?q={query.replace(' ', '+')}&start={start}"
+        driver.get(search_url)
+        time.sleep(3)
 
-    try:
-        driver.quit()
-    finally:
-        if hasattr(driver, "temp_user_data_dir"):
-            shutil.rmtree(driver.temp_user_data_dir, ignore_errors=True)
+        articles = driver.find_elements(By.CSS_SELECTOR, "div.gs_ri")
+        for art in articles:
+            try:
+                title_elem = art.find_element(By.CSS_SELECTOR, "h3 a")
+                title = title_elem.text.strip()
+                url = title_elem.get_attribute("href")
+                snippet_elem = art.find_elements(By.CLASS_NAME, "gs_rs")
+                snippet = snippet_elem[0].text.strip() if snippet_elem else "No hay resumen disponible."
+                results.append({"title": title, "url": url, "snippet": snippet})
+            except Exception:
+                continue
 
+    driver.quit()
     return results
+
 
 def get_annotated_summary(query: str) -> str:
     papers = get_web_papers_selenium(query)
     if not papers:
-        return "No se encontraron artículos científicos para esta consulta."
+        return "No se encontraron artículos."
 
     prompt = "".join(
         f"Título: {p['title']}\nResumen: {p['snippet']}\nURL: {p['url']}\n\n" for p in papers
     )
 
     full_prompt = f"""
-Analiza los siguientes artículos científicos de Google Scholar y genera un resumen
-estructurado en formato documento:
+
+"Usando una respuesta corta de maximo 4 parrafos realiza lo siguiente,"
+Analiza los siguientes artículos científicos obtenidos de Google Scholar y genera un resumen claro y estructurado en formato tipo documento:
 
 - Usa 4 párrafos separados.
-- En cada artículo, presenta el título y la URL en una línea como:
-  'url del paper - Título del paper (páginas)'
-- Calcula las páginas asumiendo 500 caracteres por página.
-- Usa viñetas o numeración para agrupar temas similares.
-- Añade saltos de línea frecuentes.
-- No uses líneas de más de 80 caracteres.
+- Incorpora títulos y URLs destacados en líneas propias.
+  usando el formato 'url paper - Título del paper (páginas)',
+  Usa las páginas específicas donde aparece la información relevante,
+  ten en cuenta que cada 500 caracteres se pasa de una página a otra,
+  es decir, los primeros 500 caracteres son la página 1, a los 1000 es la página 2,
+  y así sucesivamente.
+- Usa viñetas o numeración para temas comunes o puntos importantes.
+- Añade saltos de línea para facilitar la lectura.
+- No dejes líneas con más de 80 caracteres; usa saltos de línea para ajustar el texto.
 
-Artículos:
+Aquí están los artículos a analizar:
 
 {prompt}
 """
-    try:
-        model = genai.GenerativeModel("models/gemini-2.5-flash")
-        response = model.generate_content(full_prompt)
-        raw_summary = response.text.strip()
-        wrapped = "\n".join(textwrap.fill(line, width=80) for line in raw_summary.splitlines())
-        return wrapped
-    except Exception as e:
-        return f"❌ Error al generar el resumen con Gemini: {e}"
+
+    model = genai.GenerativeModel("models/gemini-2.5-flash")
+    response = model.generate_content(full_prompt)
+    raw_summary = response.text.strip()
+
+    # Aplicar wrap para evitar líneas muy largas, respetando saltos de línea originales
+    wrapped_summary = "\n".join(
+        textwrap.fill(line, width=80) for line in raw_summary.splitlines()
+    )
+
+    return wrapped_summary
