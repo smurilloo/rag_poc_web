@@ -3,13 +3,14 @@ apt-get update && apt-get install -y wget unzip curl gnupg jq fonts-liberation l
 CHROME_DIR="/home/site/wwwroot/bin/chrome" && \
 CHROMEDRIVER_PATH="/home/site/wwwroot/bin/chromedriver" && \
 if [ ! -f "$CHROME_DIR/chrome" ] || [ ! -f "$CHROMEDRIVER_PATH" ]; then \
-rm -rf /home/site/wwwroot/bin/chrome /home/site/wwwroot/bin/chromedriver && \
-VERSION=$(curl -sSL https://googlechromelabs.github.io/chrome-for-testing/last-known-good-versions-with-downloads.json | jq -r '.channels.Stable.version') && \
-wget -q "https://storage.googleapis.com/chrome-for-testing-public/${VERSION}/linux64/chrome-linux64.zip" && \
-wget -q "https://storage.googleapis.com/chrome-for-testing-public/${VERSION}/linux64/chromedriver-linux64.zip" && \
-unzip -q chrome-linux64.zip && unzip -q chromedriver-linux64.zip && \
-mkdir -p "$CHROME_DIR" && mv chrome-linux64/* "$CHROME_DIR/" && \
-mv chromedriver-linux64/chromedriver "$CHROMEDRIVER_PATH" && \
-chmod +x "$CHROMEDRIVER_PATH" && \
-ln -sf "$CHROME_DIR/chrome" /home/site/wwwroot/bin/chromium; fi && \
-gunicorn -w 1 -k uvicorn.workers.UvicornWorker main:app --timeout 1790 
+    rm -rf /home/site/wwwroot/bin/chrome* /home/site/wwwroot/bin/chromedriver* && \
+    VERSION=$(curl -sSL https://googlechromelabs.github.io/chrome-for-testing/last-known-good-versions-with-downloads.json | jq -r '.channels.Stable.version') && \
+    wget -q "https://storage.googleapis.com/chrome-for-testing-public/${VERSION}/linux64/chrome-linux64.zip" && \
+    wget -q "https://storage.googleapis.com/chrome-for-testing-public/${VERSION}/linux64/chromedriver-linux64.zip" && \
+    unzip -q chrome-linux64.zip && unzip -q chromedriver-linux64.zip && \
+    mkdir -p "$CHROME_DIR" && mv chrome-linux64/* "$CHROME_DIR/" && \
+    mv chromedriver-linux64/chromedriver "$CHROMEDRIVER_PATH" && \
+    chmod +x "$CHROMEDRIVER_PATH" && \
+    ln -sf "$CHROME_DIR/chrome" /home/site/wwwroot/bin/chromium; \
+fi && \
+gunicorn -w 1 -k uvicorn.workers.UvicornWorker main:app --timeout 1790
