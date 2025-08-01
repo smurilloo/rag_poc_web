@@ -1,10 +1,7 @@
-import os
-import traceback
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pathlib import Path
-
 from memory_keeper import MemoryKeeper
 from retriever import load_pdfs_azure
 from synthesizer import synthesize_answer
@@ -32,17 +29,11 @@ memory_keeper = MemoryKeeper()
 
 @app.on_event("startup")
 async def startup_event():
-    try:
-        ensure_collection()
-        print("[startup] Colección inicializada correctamente.")
-    except Exception as e:
-        print(f"[startup error] No se pudo inicializar la colección: {e}")
+    ensure_collection()  
 
 @app.get("/", response_class=HTMLResponse)
 async def root():
     html_path = Path(__file__).parent / "static" / "index.html"
-    if not html_path.exists():
-        return HTMLResponse(content="<h1>Interfaz no encontrada.</h1>", status_code=404)
     with open(html_path, "r", encoding="utf-8") as f:
         return HTMLResponse(content=f.read())
 
@@ -55,40 +46,21 @@ async def ask(request: Request):
         return JSONResponse(content={"answer": "Por favor ingresa una consulta válida."}, status_code=400)
 
     try:
-        # Carga PDFs desde Azure
         pdf_texts_by_pages, pdf_metadata = load_pdfs_azure()
-        print("[ask] PDFs cargados correctamente.")
-        
-        # Scrapeo web desde Google Scholar
         web_papers = get_web_papers_selenium(question)
-        print("[ask] Artículos web scrapeados correctamente.")
-        
-        # Vectorización temporal de los documentos
         cleanup_collection(limit=20)
         index_pdf_chunks(pdf_texts_by_pages)
         index_web_papers(web_papers)
-        print("[ask] Vectorización de documentos completada.")
-        
-        # Generación de respuesta con contexto
         memory = memory_keeper.get_context()
         answer = synthesize_answer(question, pdf_texts_by_pages, pdf_metadata, memory, web_papers)
-        print("[ask] Respuesta generada correctamente.")
-        
-        # Guardar memoria y limpiar
         memory_keeper.remember(question, answer)
         delete_collection()
-        print("[ask] Memoria guardada y colección limpiada.")
 
         return JSONResponse(content={"answer": answer})
 
     except Exception as e:
-        error_message = f"Error procesando la consulta: {str(e)}"
-        print(f"[ask error] {error_message}")
         return JSONResponse(
-            content={
-                "answer": error_message,
-                "trace": traceback.format_exc()
-            },
+            content={"answer": f"Error procesando la consulta: {str(e)}"},
             status_code=500
         )
 
@@ -105,6 +77,4 @@ async def inspect():
         })
 
     except Exception as e:
-        error_message = f"Error al inspeccionar la colección: {str(e)}"
-        print(f"[inspect error] {error_message}")
-        return JSONResponse(content={"error": error_message}, status_code=500)
+        return JSONResponse(content={"error": str(e)}, status_code=500)
