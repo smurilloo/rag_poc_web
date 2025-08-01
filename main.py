@@ -82,9 +82,11 @@ async def ask(request: Request):
         return JSONResponse(content={"answer": answer})
 
     except Exception as e:
+        error_message = f"Error procesando la consulta: {str(e)}"
+        print(f"[ask error] {error_message}")
         return JSONResponse(
             content={
-                "answer": f"Error procesando la consulta: {str(e)}",
+                "answer": error_message,
                 "trace": traceback.format_exc()
             },
             status_code=500
@@ -103,4 +105,6 @@ async def inspect():
         })
 
     except Exception as e:
-        return JSONResponse(content={"error": str(e)}, status_code=500)
+        error_message = f"Error al inspeccionar la colección: {str(e)}"
+        print(f"[inspect error] {error_message}")
+        return JSONResponse(content={"error": error_message}, status_code=500)
