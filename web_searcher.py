@@ -12,12 +12,14 @@ from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 from selenium.common.exceptions import WebDriverException
 from webdriver_manager.chrome import ChromeDriverManager
+from selenium import webdriver
+import tempfile
+import shutil
 
 api_key = os.getenv("GEMINI_API_KEY_2")
 if not api_key:
     raise ValueError("❌ Falta la variable de entorno: GEMINI_API_KEY_2")
 genai.configure(api_key=api_key)
-
 
 
 def create_chrome_driver():
@@ -29,9 +31,11 @@ def create_chrome_driver():
     chrome_options.add_argument("--disable-extensions")
     chrome_options.add_argument("--remote-debugging-port=9222")
 
+    # Crear un directorio temporal para los datos de usuario
     temp_user_data_dir = tempfile.mkdtemp()
     chrome_options.add_argument(f"--user-data-dir={temp_user_data_dir}")
 
+    # Usar webdriver-manager para manejar la descarga de ChromeDriver
     service = Service(ChromeDriverManager().install())
     driver = webdriver.Chrome(service=service, options=chrome_options)
     driver.temp_user_data_dir = temp_user_data_dir
