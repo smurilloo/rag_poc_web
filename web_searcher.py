@@ -19,7 +19,7 @@ genai.configure(api_key=api_key)
 
 def create_chrome_driver():
     bin_dir = "/home/site/wwwroot/bin"
-    chrome_path = os.path.join(bin_dir, "chrome")  # ✅ corregido
+    chrome_path = os.path.join(bin_dir, "chromium")  # Usar el enlace simbólico
     chromedriver_path = os.path.join(bin_dir, "chromedriver")
 
     if not os.path.isfile(chrome_path) or not os.path.isfile(chromedriver_path):
