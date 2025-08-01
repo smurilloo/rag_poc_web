@@ -1,6 +1,3 @@
-# Esta aplicación web recibe preguntas, busca respuestas en documentos PDF y artículos en internet,
-# y devuelve una respuesta clara usando la información encontrada, recordando conversaciones previas ..
-
 import os
 import traceback
 from fastapi import FastAPI, Request
@@ -37,6 +34,7 @@ memory_keeper = MemoryKeeper()
 async def startup_event():
     try:
         ensure_collection()
+        print("[startup] Colección inicializada correctamente.")
     except Exception as e:
         print(f"[startup error] No se pudo inicializar la colección: {e}")
 
@@ -59,22 +57,27 @@ async def ask(request: Request):
     try:
         # Carga PDFs desde Azure
         pdf_texts_by_pages, pdf_metadata = load_pdfs_azure()
+        print("[ask] PDFs cargados correctamente.")
         
         # Scrapeo web desde Google Scholar
         web_papers = get_web_papers_selenium(question)
+        print("[ask] Artículos web scrapeados correctamente.")
         
         # Vectorización temporal de los documentos
         cleanup_collection(limit=20)
         index_pdf_chunks(pdf_texts_by_pages)
         index_web_papers(web_papers)
-
+        print("[ask] Vectorización de documentos completada.")
+        
         # Generación de respuesta con contexto
         memory = memory_keeper.get_context()
         answer = synthesize_answer(question, pdf_texts_by_pages, pdf_metadata, memory, web_papers)
-
+        print("[ask] Respuesta generada correctamente.")
+        
         # Guardar memoria y limpiar
         memory_keeper.remember(question, answer)
         delete_collection()
+        print("[ask] Memoria guardada y colección limpiada.")
 
         return JSONResponse(content={"answer": answer})
 
