@@ -69,44 +69,41 @@ def wait_until_collection_ready(max_retries=10, delay=2):
     raise TimeoutError("❌ La colección no estuvo lista a tiempo.")
 
 
-def get_id(text):
-    return int(hashlib.sha256(text.encode("utf-8")).hexdigest(), 16) % (10**16)
+def _hash_id(text: str) -> str:
+    """
+    Genera un hash SHA-256 único basado en el contenido normalizado.
+    """
+    normalized = " ".join(text.lower().split())
+    return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
 
 
-def _normalize(text):
-    return " ".join(text.lower().split())
-
-
-def _get_existing_contents():
-    ensure_collection()
-    all_contents = set()
-    offset = None
-    while True:
-        points, offset = client.scroll(
+def _content_exists(content_hash: str) -> bool:
+    """
+    Verifica si el contenido ya existe en la BD vectorial usando su hash.
+    """
+    try:
+        result = client.retrieve(
             collection_name=COLLECTION_NAME,
-            limit=1000,
-            offset=offset,
-            with_payload=["content"]
+            ids=[content_hash],
+            with_payload=False,
+            with_vectors=False
         )
-        for p in points:
-            if p.payload and "content" in p.payload:
-                all_contents.add(_normalize(p.payload["content"]))
-        if not offset:
-            break
-    return all_contents
+        return len(result) > 0
+    except Exception as e:
+        logger.error(f"❌ Error al verificar existencia: {e}")
+        return False
 
 
 def index_pdf_chunks(pdf_data):
     ensure_collection()
-    existing = _get_existing_contents()
     points = []
     for doc in pdf_data:
         for page in doc["pages_texts"]:
             content = page["text"]
             if not content.strip():
                 continue
-            normalized = _normalize(content)
-            if normalized in existing:
+            content_hash = _hash_id(content)
+            if _content_exists(content_hash):
                 continue
             vector = encoder.encode(content).tolist()
             metadata = {
@@ -116,13 +113,12 @@ def index_pdf_chunks(pdf_data):
                 "page": page["page"],
                 "content": content
             }
-            points.append(PointStruct(id=get_id(content), vector=vector, payload=metadata))
+            points.append(PointStruct(id=content_hash, vector=vector, payload=metadata))
     _upsert_points(points)
 
 
 def index_web_papers(web_papers):
     ensure_collection()
-    existing = _get_existing_contents()
     points = []
     for paper in web_papers:
         snippet = paper["snippet"]
@@ -132,8 +128,8 @@ def index_web_papers(web_papers):
             chunk = snippet[i:i+500]
             if not chunk.strip():
                 continue
-            normalized = _normalize(chunk)
-            if normalized in existing:
+            content_hash = _hash_id(chunk)
+            if _content_exists(content_hash):
                 continue
             vector = encoder.encode(chunk).tolist()
             page_number = i // 500 + 1
@@ -145,8 +141,7 @@ def index_web_papers(web_papers):
                 "score": paper.get("score", 0),
                 "content": chunk
             }
-            uid = get_id(paper["url"] + str(page_number))
-            points.append(PointStruct(id=uid, vector=vector, payload=metadata))
+            points.append(PointStruct(id=content_hash, vector=vector, payload=metadata))
     _upsert_points(points)
 
 
