@@ -6,7 +6,12 @@ from memory_keeper import MemoryKeeper
 from retriever import load_pdfs_azure
 from synthesizer import synthesize_answer
 from web_searcher import get_web_papers_selenium
-from vectorizacion import index_pdf_chunks, index_web_papers, ensure_collection
+from vectorizacion import (
+    index_pdf_chunks,
+    index_web_papers,
+    get_first_k_points,
+    ensure_collection 
+)
 
 app = FastAPI()
 
@@ -22,7 +27,7 @@ memory_keeper = MemoryKeeper()
 
 @app.on_event("startup")
 async def startup_event():
-    ensure_collection()
+    ensure_collection()  
 
 @app.get("/", response_class=HTMLResponse)
 async def root():
@@ -41,11 +46,8 @@ async def ask(request: Request):
     try:
         pdf_texts_by_pages, pdf_metadata = load_pdfs_azure()
         web_papers = get_web_papers_selenium(question)
-
-        # Indexado con verificación por hash único
         index_pdf_chunks(pdf_texts_by_pages)
         index_web_papers(web_papers)
-
         memory = memory_keeper.get_context()
         answer = synthesize_answer(question, pdf_texts_by_pages, pdf_metadata, memory, web_papers)
         memory_keeper.remember(question, answer)
@@ -58,3 +60,17 @@ async def ask(request: Request):
             status_code=500
         )
 
+@app.get("/inspect", response_class=JSONResponse)
+async def inspect():
+    try:
+        points = get_first_k_points(k=20)
+        pdf_points = [p for p in points if p["payload"].get("type") == "pdf"]
+        web_points = [p for p in points if p["payload"].get("type") == "web"]
+
+        return JSONResponse(content={
+            "pdf_points": pdf_points[:10],
+            "web_points": web_points[:10]
+        })
+
+    except Exception as e:
+        return JSONResponse(content={"error": str(e)}, status_code=500)
