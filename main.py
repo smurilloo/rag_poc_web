@@ -42,7 +42,7 @@ async def ask(request: Request):
         pdf_texts_by_pages, pdf_metadata = load_pdfs_azure()
         web_papers = get_web_papers_selenium(question)
 
-        # Indexado con verificación por hash único (ya optimizado en vectorizacion.py)
+        # Indexado con verificación por hash único
         index_pdf_chunks(pdf_texts_by_pages)
         index_web_papers(web_papers)
 
@@ -57,3 +57,4 @@ async def ask(request: Request):
             content={"answer": f"Error procesando la consulta: {str(e)}"},
             status_code=500
         )
+
