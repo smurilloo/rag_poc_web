@@ -82,7 +82,7 @@ def ensure_collection():
         raise RuntimeError(f"❌ Error al verificar o crear la colección: {e}")
 
 
-def wait_until_collection_ready(max_retries=10, delay=2):
+def wait_until_collection_ready(max_retries=10, delay=1):
     """
     Espera hasta que la colección esté lista para ser usada.
     """
@@ -177,65 +177,7 @@ def _upsert_points(points):
         print(f"❌ Error al insertar puntos: {e}")
 
 
-def get_first_k_points(k=10):
-    """
-    Obtiene los primeros k puntos de la colección.
-    """
-    ensure_collection()
-    try:
-        points, _ = client.scroll(collection_name=COLLECTION_NAME, limit=k)
-        return [{"id": point.id, "payload": point.payload} for point in points]
-    except Exception as e:
-        logger.error(f"❌ Error al obtener puntos: {e}")
-        return []
 
-
-def cleanup_collection(limit=20):
-    """
-    Limpia la colección eliminando los puntos si el número de registros supera el límite.
-    """
-    if not client.collection_exists(collection_name=COLLECTION_NAME):
-        print("⚠️ No se puede limpiar: colección no existe.")
-        return
-
-    current_count = client.count(collection_name=COLLECTION_NAME).count
-    if current_count > limit:
-        print(f"🧹 Limpiando colección. Registros actuales: {current_count}")
-        scroll_offset = None
-        deleted = 0
-        while deleted + limit < current_count:
-            points, scroll_offset = client.scroll(
-                collection_name=COLLECTION_NAME,
-                limit=100,
-                offset=scroll_offset
-            )
-            ids_to_delete = [p.id for p in points]
-            if not ids_to_delete:
-                break
-            client.delete(
-                collection_name=COLLECTION_NAME,
-                points_selector=PointIdsList(points=ids_to_delete)
-            )
-            deleted += len(ids_to_delete)
-        print(f"✅ Limpieza completada. Registros eliminados: {deleted}")
-    else:
-        print("📦 No hay suficientes registros para limpiar.")
-
-
-def delete_collection():
-    """
-    Elimina la colección completa.
-    """
-    try:
-        if client.collection_exists(collection_name=COLLECTION_NAME):
-            print(f"🧨 Borrando colección completa: {COLLECTION_NAME}")
-            client.delete_collection(collection_name=COLLECTION_NAME)
-            print("✅ Colección eliminada.")
-        else:
-            print(f"ℹ️ Colección '{COLLECTION_NAME}' ya no existe. Nada que borrar.")
-    except Exception as e:
-        logger.error(f"❌ Error al borrar la colección: {e}")
-        print(f"❌ Error al borrar la colección: {e}")
 
 
 # Exportar funciones públicas
@@ -244,7 +186,6 @@ __all__ = [
     "COLLECTION_NAME",
     "index_pdf_chunks",
     "index_web_papers",
-    "get_first_k_points",
     "ensure_collection"
 ]
 
