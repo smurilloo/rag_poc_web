@@ -2,7 +2,7 @@ import os
 import time
 import hashlib
 from qdrant_client import QdrantClient
-from qdrant_client.models import Distance, VectorParams, PointStruct, PointIdsList
+from qdrant_client.models import Distance, VectorParams, PointStruct
 from sentence_transformers import SentenceTransformer
 import urllib.parse
 import logging
@@ -20,101 +20,93 @@ QDRANT_URL = os.getenv("QDRANT_URL", "").strip().strip('"')
 if not QDRANT_URL:
     raise ValueError("❌ Falta la variable de entorno QDRANT_URL")
 
-# Limpieza adicional de la URL para evitar caracteres de escape incorrectos
 try:
-    # Decodificar URL para eliminar cualquier carácter de escape
-    QDRANT_URL = urllib.parse.unquote(QDRANT_URL)
-    # Eliminar comillas dobles y espacios en blanco adicionales
-    QDRANT_URL = QDRANT_URL.replace('"', '').strip()
-    # Verificar que la URL no esté vacía después de la limpieza
-    if not QDRANT_URL:
-        raise ValueError("❌ La variable de entorno QDRANT_URL no es válida después de limpieza")
-    
-    # Validar la estructura de la URL
-    parsed_url = urllib.parse.urlparse(QDRANT_URL)
-    if not parsed_url.scheme or not parsed_url.netloc:
-        raise ValueError("❌ La variable de entorno QDRANT_URL no tiene una estructura de URL válida")
-    
-    logger.info(f"URL validada correctamente: {QDRANT_URL}")
+    QDRANT_URL = urllib.parse.unquote(QDRANT_URL).replace('"', '').strip()
+    parsed = urllib.parse.urlparse(QDRANT_URL)
+    if not parsed.scheme or not parsed.netloc:
+        raise ValueError("❌ URL inválida")
+    logger.info(f"✅ URL validada: {QDRANT_URL}")
 except Exception as e:
-    logger.error(f"❌ Error al limpiar o validar la URL: {e}")
-    raise ValueError(f"❌ Error al limpiar o validar la URL: {e}")
+    raise ValueError(f"❌ Error al validar URL: {e}")
 
 COLLECTION_NAME = "vector_bd"
 
-# === Inicialización del encoder y cliente Qdrant ===
+# === Inicialización ===
 encoder = SentenceTransformer("all-MiniLM-L6-v2")
 
 try:
-    client = QdrantClient(
-        url=QDRANT_URL,
-        api_key=QDRANT_API_KEY,
-    )
-    # Validación explícita de conexión
+    client = QdrantClient(url=QDRANT_URL, api_key=QDRANT_API_KEY)
     client.get_collections()
-    print(f"✅ Conectado exitosamente a Qdrant en {QDRANT_URL}")
+    print(f"✅ Conectado a Qdrant en {QDRANT_URL}")
 except Exception as e:
-    logger.error(f"❌ No se pudo inicializar o conectar con Qdrant: {e}")
-    raise ConnectionError(f"❌ No se pudo inicializar o conectar con Qdrant: {e}")
+    raise ConnectionError(f"❌ Error al conectar con Qdrant: {e}")
 
 
 def ensure_collection():
-    """
-    Verifica si la colección existe en Qdrant. Si no existe, la crea.
-    """
-    try:
-        if not client.collection_exists(collection_name=COLLECTION_NAME):
-            print(f"📁 Colección '{COLLECTION_NAME}' no existe. Creándola...")
-            client.recreate_collection(
-                collection_name=COLLECTION_NAME,
-                vectors_config=VectorParams(
-                    size=encoder.get_sentence_embedding_dimension(), 
-                    distance=Distance.COSINE,
-                )
+    if not client.collection_exists(collection_name=COLLECTION_NAME):
+        print(f"📁 Creando colección '{COLLECTION_NAME}'...")
+        client.recreate_collection(
+            collection_name=COLLECTION_NAME,
+            vectors_config=VectorParams(
+                size=encoder.get_sentence_embedding_dimension(),
+                distance=Distance.COSINE
             )
-            print("⏳ Esperando a que la colección esté lista...")
-            wait_until_collection_ready(max_retries=10, delay=2)
-            print("✅ Colección creada y lista.")
-        else:
-            print(f"📁 Colección '{COLLECTION_NAME}' ya existe.")
-    except Exception as e:
-        logger.error(f"❌ Error al verificar o crear la colección: {e}")
-        raise RuntimeError(f"❌ Error al verificar o crear la colección: {e}")
+        )
+        wait_until_collection_ready()
+        print("✅ Colección creada.")
+    else:
+        print(f"📁 Colección '{COLLECTION_NAME}' ya existe.")
 
 
 def wait_until_collection_ready(max_retries=10, delay=2):
-    """
-    Espera hasta que la colección esté lista para ser usada.
-    """
-    for attempt in range(max_retries):
+    for _ in range(max_retries):
         try:
-            info = client.get_collection(collection_name=COLLECTION_NAME)
-            if info.status == "green":
+            if client.get_collection(collection_name=COLLECTION_NAME).status == "green":
                 return
         except Exception:
             pass
         time.sleep(delay)
-    logger.error(f"❌ La colección '{COLLECTION_NAME}' no estuvo lista después de {max_retries * delay} segundos.")
-    raise TimeoutError(f"❌ La colección '{COLLECTION_NAME}' no estuvo lista después de {max_retries * delay} segundos.")
+    raise TimeoutError("❌ La colección no estuvo lista a tiempo.")
 
 
 def get_id(text):
-    """
-    Genera un ID único a partir del texto proporcionado.
-    """
     return int(hashlib.sha256(text.encode("utf-8")).hexdigest(), 16) % (10**16)
 
 
-def index_pdf_chunks(pdf_data):
-    """
-    Índice de fragmentos de PDF en Qdrant.
-    """
+def _normalize(text):
+    return " ".join(text.lower().split())
+
+
+def _get_existing_contents():
     ensure_collection()
+    all_contents = set()
+    offset = None
+    while True:
+        points, offset = client.scroll(
+            collection_name=COLLECTION_NAME,
+            limit=1000,
+            offset=offset,
+            with_payload=["content"]
+        )
+        for p in points:
+            if p.payload and "content" in p.payload:
+                all_contents.add(_normalize(p.payload["content"]))
+        if not offset:
+            break
+    return all_contents
+
+
+def index_pdf_chunks(pdf_data):
+    ensure_collection()
+    existing = _get_existing_contents()
     points = []
     for doc in pdf_data:
         for page in doc["pages_texts"]:
             content = page["text"]
             if not content.strip():
+                continue
+            normalized = _normalize(content)
+            if normalized in existing:
                 continue
             vector = encoder.encode(content).tolist()
             metadata = {
@@ -129,10 +121,8 @@ def index_pdf_chunks(pdf_data):
 
 
 def index_web_papers(web_papers):
-    """
-    Índice de artículos web en Qdrant.
-    """
     ensure_collection()
+    existing = _get_existing_contents()
     points = []
     for paper in web_papers:
         snippet = paper["snippet"]
@@ -141,6 +131,9 @@ def index_web_papers(web_papers):
         for i in range(0, len(snippet), 500):
             chunk = snippet[i:i+500]
             if not chunk.strip():
+                continue
+            normalized = _normalize(chunk)
+            if normalized in existing:
                 continue
             vector = encoder.encode(chunk).tolist()
             page_number = i // 500 + 1
@@ -158,94 +151,20 @@ def index_web_papers(web_papers):
 
 
 def _upsert_points(points):
-    """
-    Inserta o actualiza los puntos en la colección de Qdrant.
-    """
     if not points:
-        print("⚠️ No hay puntos para insertar.")
+        print("⚠️ No hay puntos nuevos para insertar.")
         return
     try:
-        client.upsert(
-            collection_name=COLLECTION_NAME,
-            points=points
-        )
-        print(f"✅ {len(points)} puntos insertados en '{COLLECTION_NAME}'.")
+        client.upsert(collection_name=COLLECTION_NAME, points=points)
+        print(f"✅ {len(points)} puntos nuevos insertados.")
     except Exception as e:
-        logger.error(f"❌ Error al insertar puntos: {e}")
-        if "forbidden" in str(e).lower():
-            print("🚫 Acceso prohibido: verifica la API key, el nombre de la colección o permisos.")
-        print(f"❌ Error al insertar puntos: {e}")
+        logger.error(f"❌ Error al insertar: {e}")
 
 
-def get_first_k_points(k=10):
-    """
-    Obtiene los primeros k puntos de la colección.
-    """
-    ensure_collection()
-    try:
-        points, _ = client.scroll(collection_name=COLLECTION_NAME, limit=k)
-        return [{"id": point.id, "payload": point.payload} for point in points]
-    except Exception as e:
-        logger.error(f"❌ Error al obtener puntos: {e}")
-        return []
-
-
-def cleanup_collection(limit=20):
-    """
-    Limpia la colección eliminando los puntos si el número de registros supera el límite.
-    """
-    if not client.collection_exists(collection_name=COLLECTION_NAME):
-        print("⚠️ No se puede limpiar: colección no existe.")
-        return
-
-    current_count = client.count(collection_name=COLLECTION_NAME).count
-    if current_count > limit:
-        print(f"🧹 Limpiando colección. Registros actuales: {current_count}")
-        scroll_offset = None
-        deleted = 0
-        while deleted + limit < current_count:
-            points, scroll_offset = client.scroll(
-                collection_name=COLLECTION_NAME,
-                limit=100,
-                offset=scroll_offset
-            )
-            ids_to_delete = [p.id for p in points]
-            if not ids_to_delete:
-                break
-            client.delete(
-                collection_name=COLLECTION_NAME,
-                points_selector=PointIdsList(points=ids_to_delete)
-            )
-            deleted += len(ids_to_delete)
-        print(f"✅ Limpieza completada. Registros eliminados: {deleted}")
-    else:
-        print("📦 No hay suficientes registros para limpiar.")
-
-
-def delete_collection():
-    """
-    Elimina la colección completa.
-    """
-    try:
-        if client.collection_exists(collection_name=COLLECTION_NAME):
-            print(f"🧨 Borrando colección completa: {COLLECTION_NAME}")
-            client.delete_collection(collection_name=COLLECTION_NAME)
-            print("✅ Colección eliminada.")
-        else:
-            print(f"ℹ️ Colección '{COLLECTION_NAME}' ya no existe. Nada que borrar.")
-    except Exception as e:
-        logger.error(f"❌ Error al borrar la colección: {e}")
-        print(f"❌ Error al borrar la colección: {e}")
-
-
-# Exportar funciones públicas
 __all__ = [
     "client",
     "COLLECTION_NAME",
     "index_pdf_chunks",
     "index_web_papers",
-    "get_first_k_points",
-    "cleanup_collection",
-    "delete_collection",
     "ensure_collection"
 ]
