@@ -36,3 +36,9 @@ azure-keyvault-secrets
 # Fixes for HTTPS / SSL issues
 pyopenssl
 jq
+
+# Azure OpenAI (AI Foundry)
+openai>=1.30.0
+azure-ai-inference
+azure-identity
+azure-core
