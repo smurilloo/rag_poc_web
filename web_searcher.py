@@ -1,11 +1,10 @@
 # Este código busca artículos científicos en Google Scholar usando web Scrapping con Selenium,
 # extrae títulos, resúmenes y enlaces, y luego genera un resumen claro y organizado
-# con ayuda de una inteligencia artificial para facilitar la comprensión del contenido.
+# con ayuda de un modelo desplegado en Azure AI Foundry.
 
-import google.generativeai as genai
+from openai import AzureOpenAI
 from typing import List, Dict
 from selenium import webdriver
-from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 import time
@@ -14,16 +13,22 @@ import os
 
 
 # Configuración desde variables de entorno
-api_key = os.getenv("GEMINI_API_KEY_2")
-if not api_key:
-    raise ValueError("❌ Falta GEMINI_API_KEY_2")
+api_key = os.getenv("OPEN_AI_API_KEY_1")
+endpoint = os.getenv("OPEN_AI_ENDPOINT")
+if not api_key or not endpoint:
+    raise ValueError("❌ Faltan variables de entorno OPEN_AI_API_KEY_1 o OPEN_AI_ENDPOINT")
 
-genai.configure(api_key=api_key)
+# Inicializar cliente de Azure AI Foundry (OpenAI)
+client = AzureOpenAI(
+    api_key=api_key,
+    api_version="2024-12-01-preview",
+    base_url=f"{endpoint}/openai/deployments/gpt-35-turbo"
+)
+
 
 def get_web_papers_selenium(query: str, max_pages: int = 2) -> List[Dict]:
     base_url = "https://scholar.google.com/scholar"
 
-    # Opciones para entorno headless
     options = Options()
     options.add_argument("--headless=new")
     options.add_argument("--no-sandbox")
@@ -34,7 +39,6 @@ def get_web_papers_selenium(query: str, max_pages: int = 2) -> List[Dict]:
     options.add_argument("--disable-setuid-sandbox")
     options.add_argument("--remote-debugging-port=9222")
 
-    # Inicia el navegador con las opciones headless
     driver = webdriver.Chrome(options=options)
 
     results = []
@@ -70,31 +74,36 @@ def get_annotated_summary(query: str) -> str:
     )
 
     full_prompt = f"""
-
-"Usando una respuesta corta de maximo 4 parrafos realiza lo siguiente,"
+"Usando una respuesta corta de máximo 4 párrafos realiza lo siguiente,"
 Analiza los siguientes artículos científicos obtenidos de Google Scholar y genera un resumen claro y estructurado en formato tipo documento:
 
 - Usa 4 párrafos separados.
-- Incorpora títulos y URLs destacados en líneas propias.
-  usando el formato 'url paper - Título del paper (páginas)',
-  Usa las páginas específicas donde aparece la información relevante,
-  ten en cuenta que cada 500 caracteres se pasa de una página a otra,
-  es decir, los primeros 500 caracteres son la página 1, a los 1000 es la página 2,
-  y así sucesivamente.
+- Incorpora títulos y URLs destacados en líneas propias,
+  usando el formato 'url del paper - Título del paper (páginas)'.
+- Usa las páginas específicas donde aparece la información relevante,
+  considerando que cada 500 caracteres corresponde a una página.
 - Usa viñetas o numeración para temas comunes o puntos importantes.
-- Añade saltos de línea para facilitar la lectura.
-- No dejes líneas con más de 80 caracteres; usa saltos de línea para ajustar el texto.
+- Añade saltos de línea para mejorar la lectura.
+- No dejes líneas con más de 80 caracteres.
 
 Aquí están los artículos a analizar:
 
 {prompt}
 """
 
-    model = genai.GenerativeModel("models/gemini-2.5-flash")
-    response = model.generate_content(full_prompt)
-    raw_summary = response.text.strip()
+    response = client.chat.completions.create(
+        model="samue-mekqilbh-eastus_project",
+        messages=[
+            {"role": "system", "content": "Eres un asistente útil que resume papers académicos."},
+            {"role": "user", "content": full_prompt}
+        ],
+        temperature=0.7,
+        max_tokens=800
+    )
 
-    # Aplicar wrap para evitar líneas muy largas, respetando saltos de línea originales
+    raw_summary = response.choices[0].message.content.strip()
+
+    # Ajustar texto a 80 caracteres por línea
     wrapped_summary = "\n".join(
         textwrap.fill(line, width=80) for line in raw_summary.splitlines()
     )
