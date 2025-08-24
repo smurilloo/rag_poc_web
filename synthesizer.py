@@ -13,15 +13,16 @@ from vectorizacion import client, COLLECTION_NAME
 # ===============================
 api_key = os.getenv("OPEN_AI_API_KEY_1")
 endpoint = os.getenv("OPEN_AI_ENDPOINT")
+deployment = os.getenv("OPEN_AI_DEPLOYMENT") 
 
-if not api_key or not endpoint:
-    raise ValueError("Falta OPEN_AI_API_KEY_1 o OPEN_AI_ENDPOINT en variables de entorno")
+if not api_key or not endpoint or not deployment:
+    raise ValueError("Faltan variables de entorno OPEN_AI_API_KEY_1, OPEN_AI_ENDPOINT o OPEN_AI_DEPLOYMENT")
 
 # Inicializar cliente Azure OpenAI
 client_aoai = AzureOpenAI(
     api_key=api_key,
     api_version="2024-12-01-preview",
-    azure_endpoint=endpoint,
+    azure_endpoint=endpoint
 )
 
 # Inicializar modelo de embeddings
@@ -32,7 +33,6 @@ encoder = SentenceTransformer("all-MiniLM-L6-v2")
 # ===============================
 def search_qdrant(query, top_k=5):
     query_vector = encoder.encode(query).tolist()
-
     hits = client.search(
         collection_name=COLLECTION_NAME,
         query_vector=query_vector,
@@ -58,10 +58,7 @@ def search_qdrant(query, top_k=5):
 def synthesize_answer(query, pdfs, pdf_metadata, memory, web_papers):
     qdrant_results = search_qdrant(query, top_k=5)
 
-    pdf_section = ""
-    instruccion_archivos = ""
-    documents = ""
-
+    pdf_section, instruccion_archivos, documents = "", "", ""
     if pdfs and pdf_metadata:
         pdf_list_text = "\n".join(
             f"- {item['filename']} - {item['title']} (páginas: {item['pages']})"
@@ -69,11 +66,9 @@ def synthesize_answer(query, pdfs, pdf_metadata, memory, web_papers):
         )
         pdf_section = f"Fuentes PDF consultadas:\n{pdf_list_text}\n"
         instruccion_archivos = (
-            "Responde la pregunta realizada usando una respuesta corta de máximo 4 párrafos. "
-            "IMPORTANTE: El modelo no tiene acceso a los archivos originales, "
-            "solo al contenido textual proporcionado. Menciona explícitamente las fuentes citadas "
-            "usando el formato 'nombre_archivo.pdf - Título del paper (páginas)'. "
-            "Usa las páginas específicas donde aparece la información relevante."
+            "Responde en máximo 4 párrafos. "
+            "Menciona explícitamente las fuentes citadas "
+            "usando el formato 'nombre_archivo.pdf - Título (páginas)'. "
         )
 
         parts = []
@@ -82,39 +77,30 @@ def synthesize_answer(query, pdfs, pdf_metadata, memory, web_papers):
                 parts.append(f"[{pdf['filename']} - Página {page['page']}]\n{page['text']}")
         documents = "\n\n".join(parts)
 
-    web_section = ""
-    instruccion_web = ""
+    web_section, instruccion_web = "", ""
     if web_papers:
         web_parts = []
         for wp in sorted(web_papers, key=lambda x: x.get("score", 0), reverse=True):
-            title = wp['title']
-            url = wp['url']
-            snippet = wp['snippet']
-
+            title, url, snippet = wp['title'], wp['url'], wp['snippet']
             page_num = 1
             for i in range(0, len(snippet), 500):
                 page_text = snippet[i:i+500]
                 web_parts.append(f"{url} - {title} (página {page_num})\n{page_text}")
                 page_num += 1
-
-        web_section = f"Artículos web relevantes desde Google Scholar:\n" + "\n\n".join(web_parts) + "\n"
+        web_section = "Artículos web relevantes:\n" + "\n\n".join(web_parts) + "\n"
         instruccion_web = (
-            "Responde la pregunta usando máximo 4 párrafos, a partir de los artículos web. "
-            "Para cada fuente, comienza indicando 'url - Título (páginas)', "
-            "y luego el análisis a partir de las páginas útiles. "
-            "Indica las páginas específicas (cada 500 caracteres = 1 página). "
-            "Puedes usar citas textuales o parafrasear, pero siempre citando el número de página. "
-            "Usa viñetas o numeración para los puntos clave."
+            "Responde en máximo 4 párrafos, citando URL y título. "
+            "Indica páginas (cada 500 caracteres = 1 página)."
         )
 
     qdrant_section = ""
     if qdrant_results:
         qdrant_text = "\n\n".join(
-            f"[{result['type']}] {result['filename'] if result['type'] == 'pdf' else result['url']} "
-            f"- {result['title']} (página {result['page']})\n{result['content']}"
-            for result in qdrant_results
+            f"[{r['type']}] {r['filename'] if r['type'] == 'pdf' else r['url']} "
+            f"- {r['title']} (página {r['page']})\n{r['content']}"
+            for r in qdrant_results
         )
-        qdrant_section = f"Resultados de la base de datos vectorial:\n{qdrant_text}\n"
+        qdrant_section = f"Resultados vectoriales:\n{qdrant_text}\n"
 
     # Construir prompt
     prompt = f"""
@@ -123,7 +109,7 @@ Contexto previo:
 
 Consulta: {query}
 
-Fuentes documentales (texto extraído de PDFs):
+Fuentes PDF:
 {documents}
 
 {pdf_section}
@@ -133,32 +119,20 @@ Fuentes documentales (texto extraído de PDFs):
 {instruccion_web}
 
 {qdrant_section}
-
-Estructura la respuesta iniciando con los hallazgos de los PDFs
-y luego el análisis de los papers web.
-Usa formato claro, con títulos, URLs, viñetas y saltos de línea.
 """
 
-    # Llamar al modelo desplegado en Azure AI Foundry
+    #Aquí está la corrección: usar deployment_name en lugar de model
     response = client_aoai.chat.completions.create(
-        model="samue-mekqilbh-eastus_project",
+        deployment_id=deployment,
         messages=[
-            {"role": "system", "content": "Eres un asistente especializado en resumir información de PDFs y artículos académicos."},
+            {"role": "system", "content": "Eres un asistente que resume PDFs y artículos académicos."},
             {"role": "user", "content": prompt}
         ],
-        max_tokens=1200,
+        max_tokens=800,
         temperature=0.7,
     )
 
-    #Acceso seguro al contenido (evita errores JSON)
-    raw_summary = ""
-    if response and response.choices:
-        if hasattr(response.choices[0], "message") and response.choices[0].message:
-            raw_summary = response.choices[0].message.content.strip()
-        elif hasattr(response.choices[0], "text"):
-            raw_summary = response.choices[0].text.strip()
-        else:
-            raw_summary = "No se recibió contenido válido del modelo."
+    raw_summary = response.choices[0].message.content if response and response.choices else "No se recibió respuesta."
 
     wrapped_summary = "\n".join(
         textwrap.fill(line, width=80) for line in raw_summary.splitlines()
