@@ -22,7 +22,7 @@ if not api_key or not endpoint:
 client = AzureOpenAI(
     api_key=api_key,
     api_version="2024-12-01-preview",
-    base_url=f"{endpoint}/openai/deployments/gpt-35-turbo"
+    azure_endpoint=endpoint
 )
 
 
@@ -101,6 +101,7 @@ Aquí están los artículos a analizar:
         max_tokens=800
     )
 
+
     raw_summary = response.choices[0].message.content.strip()
 
     # Ajustar texto a 80 caracteres por línea
@@ -109,3 +110,4 @@ Aquí están los artículos a analizar:
     )
 
     return wrapped_summary
+
