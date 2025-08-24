@@ -5,7 +5,7 @@
 import os
 import textwrap
 from openai import AzureOpenAI
-from sentence_transformers import SentenceTransformer 
+from sentence_transformers import SentenceTransformer
 from vectorizacion import client, COLLECTION_NAME
 
 # ===============================
@@ -98,7 +98,6 @@ def synthesize_answer(query, pdfs, pdf_metadata, memory, web_papers):
                 page_num += 1
 
         web_section = f"Artículos web relevantes desde Google Scholar:\n" + "\n\n".join(web_parts) + "\n"
-
         instruccion_web = (
             "Responde la pregunta usando máximo 4 párrafos, a partir de los artículos web. "
             "Para cada fuente, comienza indicando 'url - Título (páginas)', "
@@ -147,14 +146,21 @@ Usa formato claro, con títulos, URLs, viñetas y saltos de línea.
             {"role": "system", "content": "Eres un asistente especializado en resumir información de PDFs y artículos académicos."},
             {"role": "user", "content": prompt}
         ],
-        max_tokens=1200,
+        max_tokens=800,
         temperature=0.7,
     )
 
-    raw_summary = response.choices[0].message.content.strip()
-    wrapped_summary = "\n".join(textwrap.fill(line, width=80) for line in raw_summary.splitlines())
+    # ✅ Acceso seguro al contenido (evita errores JSON)
+    raw_summary = ""
+    if response and response.choices:
+        if hasattr(response.choices[0], "message") and response.choices[0].message:
+            raw_summary = response.choices[0].message.content.strip()
+        elif hasattr(response.choices[0], "text"):
+            raw_summary = response.choices[0].text.strip()
+        else:
+            raw_summary = "⚠️ No se recibió contenido válido del modelo."
+
+    wrapped_summary = "\n".join(
+        textwrap.fill(line, width=80) for line in raw_summary.splitlines()
+    )
     return wrapped_summary
-
-
-    return wrapped_summary
-
