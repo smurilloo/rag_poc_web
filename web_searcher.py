@@ -96,7 +96,7 @@ Aquí están los artículos a analizar:
         max_tokens=800
     )
 
-    # Manejo seguro de la salida
+    #Manejo seguro de la salida
     raw_summary = ""
     if response and response.choices:
         if hasattr(response.choices[0], "message") and response.choices[0].message:
