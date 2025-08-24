@@ -14,10 +14,12 @@ import os
 # Configuración desde variables de entorno
 api_key = os.getenv("OPEN_AI_API_KEY_1")
 endpoint = os.getenv("OPEN_AI_ENDPOINT")
-if not api_key or not endpoint:
-    raise ValueError("Faltan variables de entorno OPEN_AI_API_KEY_1 o OPEN_AI_ENDPOINT")
+deployment = os.getenv("OPEN_AI_DEPLOYMENT")
 
-# Inicializar cliente de Azure AI Foundry (OpenAI)
+if not api_key or not endpoint or not deployment:
+    raise ValueError("Faltan OPEN_AI_API_KEY_1, OPEN_AI_ENDPOINT o OPEN_AI_DEPLOYMENT")
+
+# Cliente Azure OpenAI
 client = AzureOpenAI(
     api_key=api_key,
     api_version="2024-12-01-preview",
@@ -33,11 +35,8 @@ def get_web_papers_selenium(query: str, max_pages: int = 2) -> List[Dict]:
     options.add_argument("--disable-dev-shm-usage")
     options.add_argument("--disable-gpu")
     options.add_argument("--disable-extensions")
-    options.add_argument("--disable-software-rasterizer")
-    options.add_argument("--disable-setuid-sandbox")
-    options.add_argument("--remote-debugging-port=9222")
-
     driver = webdriver.Chrome(options=options)
+
     results = []
     for page in range(max_pages):
         start = page * 10
@@ -69,25 +68,13 @@ def get_annotated_summary(query: str) -> str:
     )
 
     full_prompt = f"""
-"Usando una respuesta corta de máximo 4 párrafos realiza lo siguiente,"
-Analiza los siguientes artículos científicos obtenidos de Google Scholar y genera un resumen claro y estructurado en formato tipo documento:
-
-- Usa 4 párrafos separados.
-- Incorpora títulos y URLs destacados en líneas propias,
-  usando el formato 'url del paper - Título del paper (páginas)'.
-- Usa las páginas específicas donde aparece la información relevante,
-  considerando que cada 500 caracteres corresponde a una página.
-- Usa viñetas o numeración para temas comunes o puntos importantes.
-- Añade saltos de línea para mejorar la lectura.
-- No dejes líneas con más de 80 caracteres.
-
-Aquí están los artículos a analizar:
+Analiza los siguientes artículos de Google Scholar y resume en máximo 4 párrafos:
 
 {prompt}
 """
 
     response = client.chat.completions.create(
-        model="samue-mekqilbh-eastus_project",
+        deployment_id=deployment, 
         messages=[
             {"role": "system", "content": "Eres un asistente útil que resume papers académicos."},
             {"role": "user", "content": full_prompt}
@@ -96,17 +83,11 @@ Aquí están los artículos a analizar:
         max_tokens=800
     )
 
-    #Manejo seguro de la salida
-    raw_summary = ""
-    if response and response.choices:
-        if hasattr(response.choices[0], "message") and response.choices[0].message:
-            raw_summary = response.choices[0].message.content.strip()
-        elif hasattr(response.choices[0], "text"):
-            raw_summary = response.choices[0].text.strip()
-        else:
-            raw_summary = "No se recibió contenido válido del modelo."
+    raw_summary = response.choices[0].message.content if response and response.choices else "No se recibió respuesta."
 
     wrapped_summary = "\n".join(
         textwrap.fill(line, width=80) for line in raw_summary.splitlines()
     )
     return wrapped_summary
+
+
