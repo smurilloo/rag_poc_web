@@ -11,12 +11,11 @@ import time
 import textwrap
 import os
 
-
 # Configuración desde variables de entorno
 api_key = os.getenv("OPEN_AI_API_KEY_1")
 endpoint = os.getenv("OPEN_AI_ENDPOINT")
 if not api_key or not endpoint:
-    raise ValueError("❌ Faltan variables de entorno OPEN_AI_API_KEY_1 o OPEN_AI_ENDPOINT")
+    raise ValueError("Faltan variables de entorno OPEN_AI_API_KEY_1 o OPEN_AI_ENDPOINT")
 
 # Inicializar cliente de Azure AI Foundry (OpenAI)
 client = AzureOpenAI(
@@ -24,7 +23,6 @@ client = AzureOpenAI(
     api_version="2024-12-01-preview",
     azure_endpoint=endpoint
 )
-
 
 def get_web_papers_selenium(query: str, max_pages: int = 2) -> List[Dict]:
     base_url = "https://scholar.google.com/scholar"
@@ -40,7 +38,6 @@ def get_web_papers_selenium(query: str, max_pages: int = 2) -> List[Dict]:
     options.add_argument("--remote-debugging-port=9222")
 
     driver = webdriver.Chrome(options=options)
-
     results = []
     for page in range(max_pages):
         start = page * 10
@@ -59,10 +56,8 @@ def get_web_papers_selenium(query: str, max_pages: int = 2) -> List[Dict]:
                 results.append({"title": title, "url": url, "snippet": snippet})
             except Exception:
                 continue
-
     driver.quit()
     return results
-
 
 def get_annotated_summary(query: str) -> str:
     papers = get_web_papers_selenium(query)
@@ -101,13 +96,17 @@ Aquí están los artículos a analizar:
         max_tokens=800
     )
 
+    # Manejo seguro de la salida
+    raw_summary = ""
+    if response and response.choices:
+        if hasattr(response.choices[0], "message") and response.choices[0].message:
+            raw_summary = response.choices[0].message.content.strip()
+        elif hasattr(response.choices[0], "text"):
+            raw_summary = response.choices[0].text.strip()
+        else:
+            raw_summary = "No se recibió contenido válido del modelo."
 
-    raw_summary = response.choices[0].message.content.strip()
-
-    # Ajustar texto a 80 caracteres por línea
     wrapped_summary = "\n".join(
         textwrap.fill(line, width=80) for line in raw_summary.splitlines()
     )
-
     return wrapped_summary
-
