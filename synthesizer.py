@@ -146,11 +146,11 @@ Usa formato claro, con títulos, URLs, viñetas y saltos de línea.
             {"role": "system", "content": "Eres un asistente especializado en resumir información de PDFs y artículos académicos."},
             {"role": "user", "content": prompt}
         ],
-        max_tokens=800,
+        max_tokens=1200,
         temperature=0.7,
     )
 
-    # Acceso seguro al contenido (evita errores JSON)
+    #Acceso seguro al contenido (evita errores JSON)
     raw_summary = ""
     if response and response.choices:
         if hasattr(response.choices[0], "message") and response.choices[0].message:
@@ -164,4 +164,3 @@ Usa formato claro, con títulos, URLs, viñetas y saltos de línea.
         textwrap.fill(line, width=80) for line in raw_summary.splitlines()
     )
     return wrapped_summary
-
