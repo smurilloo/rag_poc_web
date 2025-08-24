@@ -15,7 +15,7 @@ api_key = os.getenv("OPEN_AI_API_KEY_1")
 endpoint = os.getenv("OPEN_AI_ENDPOINT")
 
 if not api_key or not endpoint:
-    raise ValueError("❌ Falta OPEN_AI_API_KEY_1 o OPEN_AI_ENDPOINT en variables de entorno")
+    raise ValueError("Falta OPEN_AI_API_KEY_1 o OPEN_AI_ENDPOINT en variables de entorno")
 
 # Inicializar cliente Azure OpenAI
 client_aoai = AzureOpenAI(
@@ -150,7 +150,7 @@ Usa formato claro, con títulos, URLs, viñetas y saltos de línea.
         temperature=0.7,
     )
 
-    # ✅ Acceso seguro al contenido (evita errores JSON)
+    # Acceso seguro al contenido (evita errores JSON)
     raw_summary = ""
     if response and response.choices:
         if hasattr(response.choices[0], "message") and response.choices[0].message:
@@ -158,9 +158,10 @@ Usa formato claro, con títulos, URLs, viñetas y saltos de línea.
         elif hasattr(response.choices[0], "text"):
             raw_summary = response.choices[0].text.strip()
         else:
-            raw_summary = "⚠️ No se recibió contenido válido del modelo."
+            raw_summary = "No se recibió contenido válido del modelo."
 
     wrapped_summary = "\n".join(
         textwrap.fill(line, width=80) for line in raw_summary.splitlines()
     )
     return wrapped_summary
+
