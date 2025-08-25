@@ -1,7 +1,3 @@
-# Este código toma una pregunta y busca información en documentos PDF y artículos en internet,
-# luego usa inteligencia artificial (Azure OpenAI desplegado en AI Foundry)
-# para combinar y resumir esa información en una respuesta clara y organizada.
-
 import os
 import textwrap
 from openai import AzureOpenAI
@@ -18,27 +14,24 @@ deployment = os.getenv("OPEN_AI_DEPLOYMENT")
 if not api_key or not endpoint or not deployment:
     raise ValueError("Faltan variables de entorno OPEN_AI_API_KEY_1, OPEN_AI_ENDPOINT o OPEN_AI_DEPLOYMENT")
 
-# Inicializar cliente Azure OpenAI
 client_aoai = AzureOpenAI(
     api_key=api_key,
     api_version="2024-12-01-preview",
     azure_endpoint=endpoint
 )
 
-# Inicializar modelo de embeddings
 encoder = SentenceTransformer("all-MiniLM-L6-v2")
 
 # ===============================
 # Función: buscar en Qdrant
 # ===============================
-def search_qdrant(query, top_k=1):
+def search_qdrant(query, top_k=5):
     query_vector = encoder.encode(query).tolist()
     hits = client.search(
         collection_name=COLLECTION_NAME,
         query_vector=query_vector,
         limit=top_k
     )
-
     results = []
     for hit in hits:
         payload = hit.payload
@@ -53,99 +46,92 @@ def search_qdrant(query, top_k=1):
     return results
 
 # ===============================
-# Función: síntesis de respuesta con Azure OpenAI
+# Helper: dividir textos en chunks
+# ===============================
+def chunk_text(items, max_chars=25000):
+    """
+    Divide contenido en bloques que no excedan max_chars caracteres (~25k tokens).
+    """
+    chunks = []
+    current_chunk = ""
+    for item in items:
+        if 'pages_texts' in item:  # PDFs
+            for page in item['pages_texts']:
+                text = f"[{item['filename']} - Página {page['page']}]\n{page['text']}\n\n"
+                if len(current_chunk) + len(text) > max_chars:
+                    if current_chunk:
+                        chunks.append(current_chunk)
+                    current_chunk = text
+                else:
+                    current_chunk += text
+        else:  # Web papers
+            snippet = item.get("snippet", "")
+            for i in range(0, len(snippet), 500):
+                page_text = snippet[i:i+500]
+                page_num = i // 500 + 1
+                text = f"{item.get('url')} - {item.get('title')} (página {page_num})\n{page_text}\n\n"
+                if len(current_chunk) + len(text) > max_chars:
+                    if current_chunk:
+                        chunks.append(current_chunk)
+                    current_chunk = text
+                else:
+                    current_chunk += text
+    if current_chunk:
+        chunks.append(current_chunk)
+    return chunks
+
+# ===============================
+# Función: síntesis de respuesta segura
 # ===============================
 def synthesize_answer(query, pdfs, pdf_metadata, memory, web_papers):
     try:
         qdrant_results = search_qdrant(query, top_k=1)
 
-        pdf_section, instruccion_archivos, documents = "", "", ""
-        if pdfs and pdf_metadata:
-            pdf_list_text = "\n".join(
-                f"- {item['filename']} - {item['title']} (páginas: {item['pages']})"
-                for item in pdf_metadata
-            )
-            pdf_section = f"Fuentes PDF consultadas:\n{pdf_list_text}\n"
-            instruccion_archivos = (
-                "Responde en máximo 4 párrafos. "
-                "Menciona explícitamente las fuentes citadas "
-                "usando el formato 'nombre_archivo.pdf - Título (páginas)'. "
-            )
+        # Construir listas de contenido para chunking
+        content_items = []
 
-            parts = []
-            for pdf in pdfs:
-                for page in pdf['pages_texts']:
-                    parts.append(f"[{pdf['filename']} - Página {page['page']}]\n{page['text']}")
-            documents = "\n\n".join(parts)
-
-        web_section, instruccion_web = "", ""
+        if pdfs:
+            content_items.extend(pdfs)
         if web_papers:
-            web_parts = []
-            for wp in sorted(web_papers, key=lambda x: x.get("score", 0), reverse=True):
-                title, url, snippet = wp['title'], wp['url'], wp['snippet']
-                page_num = 1
-                for i in range(0, len(snippet), 500):
-                    page_text = snippet[i:i+500]
-                    web_parts.append(f"{url} - {title} (página {page_num})\n{page_text}")
-                    page_num += 1
-            web_section = "Artículos web relevantes:\n" + "\n\n".join(web_parts) + "\n"
-            instruccion_web = (
-                "Responde en máximo 4 párrafos, citando URL y título. "
-                "Indica páginas (cada 500 caracteres = 1 página)."
-            )
-
-        qdrant_section = ""
+            content_items.extend(web_papers)
         if qdrant_results:
-            qdrant_text = "\n\n".join(
-                f"[{r['type']}] {r['filename'] if r['type'] == 'pdf' else r['url']} "
-                f"- {r['title']} (página {r['page']})\n{r['content']}"
-                for r in qdrant_results
-            )
-            qdrant_section = f"Resultados vectoriales:\n{qdrant_text}\n"
+            content_items.extend(qdrant_results)
 
-        # Construir prompt
-        prompt = f"""
+        text_chunks = chunk_text(content_items, max_chars=25000)
+
+        summaries = []
+        for chunk in text_chunks:
+            prompt = f"""
 Contexto previo:
 {memory}
 
 Consulta: {query}
 
-Fuentes PDF:
-{documents}
+Información relevante:
+{chunk}
 
-{pdf_section}
-{instruccion_archivos}
-
-{web_section}
-{instruccion_web}
-
-{qdrant_section}
+Responde en máximo 4 párrafos, citando URL y título. Indica páginas (cada 500 caracteres = 1 página).
 """
+            response = client_aoai.chat.completions.create(
+                model=deployment,
+                messages=[
+                    {"role": "system", "content": "Eres un asistente que resume PDFs y artículos académicos."},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.7,
+                max_tokens=200,
+                top_p=1.0
+            )
+            raw_summary = (
+                response.choices[0].message.content
+                if response and response.choices and response.choices[0].message
+                else "No se recibió respuesta."
+            )
+            wrapped_summary = "\n".join(textwrap.fill(line, width=80) for line in raw_summary.splitlines())
+            summaries.append(wrapped_summary.strip())
 
-        # Llamada a Azure OpenAI con el deployment configurado
-        response = client_aoai.chat.completions.create(
-            model=deployment,
-            messages=[
-                {"role": "system", "content": "Eres un asistente que resume PDFs y artículos académicos."},
-                {"role": "user", "content": prompt}
-            ],
-            max_tokens=200,
-            temperature=0.7,
-            top_p=1.0
-        )
-
-        # 🔑 Extraer solo el texto, nunca el objeto crudo
-        raw_summary = (
-            response.choices[0].message.content
-            if response and response.choices and response.choices[0].message
-            else "No se recibió respuesta."
-        )
-
-        wrapped_summary = "\n".join(
-            textwrap.fill(line, width=80) for line in raw_summary.splitlines()
-        )
-
-        return wrapped_summary.strip()
+        # Combinar todos los resúmenes parciales
+        return "\n\n".join(summaries)
 
     except Exception as e:
         return f"Error al generar respuesta: {str(e)}"
