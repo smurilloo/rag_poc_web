@@ -85,15 +85,18 @@ Analiza los siguientes artículos de Google Scholar y resume en máximo 4 párra
             top_p=1.0
         )
 
-        raw_summary = response.choices[0].message.content if response and response.choices else "No se recibió respuesta."
+        # 🔑 Extraer siempre solo el contenido
+        raw_summary = (
+            response.choices[0].message.content
+            if response and response.choices and response.choices[0].message
+            else "No se recibió respuesta."
+        )
 
         wrapped_summary = "\n".join(
             textwrap.fill(line, width=80) for line in raw_summary.splitlines()
         )
 
-        # Devolver solo texto plano
-        return wrapped_summary
+        return wrapped_summary.strip()
 
     except Exception as e:
         return f"Error al generar resumen web: {str(e)}"
-
