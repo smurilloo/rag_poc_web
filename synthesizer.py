@@ -31,7 +31,7 @@ encoder = SentenceTransformer("all-MiniLM-L6-v2")
 # ===============================
 # Función: buscar en Qdrant
 # ===============================
-def search_qdrant(query, top_k=5):
+def search_qdrant(query, top_k=1):
     query_vector = encoder.encode(query).tolist()
     hits = client.search(
         collection_name=COLLECTION_NAME,
@@ -57,7 +57,7 @@ def search_qdrant(query, top_k=5):
 # ===============================
 def synthesize_answer(query, pdfs, pdf_metadata, memory, web_papers):
     try:
-        qdrant_results = search_qdrant(query, top_k=5)
+        qdrant_results = search_qdrant(query, top_k=1)
 
         pdf_section, instruccion_archivos, documents = "", "", ""
         if pdfs and pdf_metadata:
@@ -129,7 +129,7 @@ Fuentes PDF:
                 {"role": "system", "content": "Eres un asistente que resume PDFs y artículos académicos."},
                 {"role": "user", "content": prompt}
             ],
-            max_tokens=800,
+            max_tokens=200,
             temperature=0.7,
             top_p=1.0
         )
@@ -145,3 +145,4 @@ Fuentes PDF:
 
     except Exception as e:
         return f"Error al generar respuesta: {str(e)}"
+
