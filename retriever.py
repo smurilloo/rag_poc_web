@@ -75,7 +75,7 @@ def compress_page_ranges(pages):
 # ===============================
 # Carga e indexación de PDFs
 # ===============================
-def load_and_index_pdfs():
+def load_pdfs_azure():
     """
     Descarga de Azure solo los PDFs que no están en Qdrant.
     Indexa en Qdrant los nuevos PDFs encontrados.
@@ -151,3 +151,4 @@ def load_and_index_pdfs():
         print(f"📌 Indexados {len(new_pdfs_to_index)} nuevos PDFs en Qdrant")
 
     return pdfs, metadatas
+
