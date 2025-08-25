@@ -38,8 +38,8 @@ def search_qdrant(query, top_k=5):
         results.append({
             "type": payload["type"],
             "filename" if payload["type"] == "pdf" else "url": payload.get("filename", payload.get("url")),
-            "title": payload["title"],
-            "page": payload["page"],
+            "title": payload.get("title", ""),
+            "page": payload.get("page", 1),
             "score": hit.score,
             "content": payload.get("content", "")
         })
@@ -64,18 +64,20 @@ def chunk_text(items, max_chars=5000):
                     current_chunk = text
                 else:
                     current_chunk += text
-        else:  # Web papers
-            snippet = item.get("snippet", "")
-            for i in range(0, len(snippet), 500):
-                page_text = snippet[i:i+500]
-                page_num = i // 500 + 1
-                text = f"{item.get('url')} - {item.get('title')} (página {page_num})\n{page_text}\n\n"
-                if len(current_chunk) + len(text) > max_chars:
-                    if current_chunk:
-                        chunks.append(current_chunk)
-                    current_chunk = text
-                else:
-                    current_chunk += text
+        else:  # Web papers o Qdrant results
+            snippet = item.get("content", "")
+            if not snippet:
+                continue
+            page_num = item.get("page", 1)
+            source = item.get("filename", item.get("url", ""))
+            title = item.get("title", "")
+            text = f"[{source} - Página {page_num}] {title}\n{snippet}\n\n"
+            if len(current_chunk) + len(text) > max_chars:
+                if current_chunk:
+                    chunks.append(current_chunk)
+                current_chunk = text
+            else:
+                current_chunk += text
     if current_chunk:
         chunks.append(current_chunk)
     return chunks
@@ -85,9 +87,9 @@ def chunk_text(items, max_chars=5000):
 # ===============================
 def synthesize_answer(query, pdfs, pdf_metadata, memory, web_papers):
     try:
-        qdrant_results = search_qdrant(query, top_k=1)
+        qdrant_results = search_qdrant(query, top_k=5)
 
-        # Construir listas de contenido para chunking
+        # Construir lista de contenido para chunking
         content_items = []
         if pdfs:
             content_items.extend(pdfs)
@@ -96,7 +98,7 @@ def synthesize_answer(query, pdfs, pdf_metadata, memory, web_papers):
         if qdrant_results:
             content_items.extend(qdrant_results)
 
-        # Dividir en chunks de máximo 5k caracteres (~tokens)
+        # Dividir en chunks de máximo 5k caracteres
         text_chunks = chunk_text(content_items, max_chars=5000)
 
         summaries = []
@@ -113,7 +115,6 @@ Información relevante:
 
 Responde en máximo 4 párrafos. Cita fuentes y páginas donde corresponda.
 """
-            # Validar que prompt no esté vacío
             if not prompt.strip():
                 continue
 
@@ -128,14 +129,12 @@ Responde en máximo 4 párrafos. Cita fuentes y páginas donde corresponda.
                 top_p=1.0
             )
 
-            # 🔑 Validación robusta de la respuesta
             try:
                 raw_summary = (
                     response.choices[0].message.content
                     if response and getattr(response.choices[0], "message", None)
                     else "No se recibió respuesta."
                 )
-                # Limpiar caracteres no JSON / invisibles
                 raw_summary = raw_summary.replace("\x00", "").strip()
             except Exception:
                 raw_summary = "No se recibió respuesta."
@@ -147,4 +146,3 @@ Responde en máximo 4 párrafos. Cita fuentes y páginas donde corresponda.
 
     except Exception as e:
         return f"Error al generar respuesta: {str(e)}"
-
