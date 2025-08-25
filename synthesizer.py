@@ -123,7 +123,7 @@ Fuentes PDF:
 
     #Aquí está la corrección: usar deployment_name en lugar de model
     response = client_aoai.chat.completions.create(
-        deployment_id=deployment,
+        model=deployment,
         messages=[
             {"role": "system", "content": "Eres un asistente que resume PDFs y artículos académicos."},
             {"role": "user", "content": prompt}
@@ -138,3 +138,4 @@ Fuentes PDF:
         textwrap.fill(line, width=80) for line in raw_summary.splitlines()
     )
     return wrapped_summary
+
