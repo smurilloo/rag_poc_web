@@ -7,7 +7,6 @@ from retriever import load_pdfs_azure
 from synthesizer import synthesize_answer
 from web_searcher import get_web_papers_selenium
 from vectorizacion import (
-    index_pdf_chunks,
     index_web_papers,
     ensure_collection
 )
@@ -52,14 +51,13 @@ async def ask(request: Request):
         )
 
     try:
-        # Recuperar PDFs
+        # Recuperar PDFs (solo descarga e indexa nuevos)
         pdf_texts_by_pages, pdf_metadata = load_pdfs_azure()
 
         # Buscar papers web
         web_papers = get_web_papers_selenium(question)
 
-        # Indexar
-        index_pdf_chunks(pdf_texts_by_pages)
+        # Indexar web papers (los PDFs ya se indexaron dentro de load_pdfs_azure)
         index_web_papers(web_papers)
 
         # Recuperar memoria contextual
