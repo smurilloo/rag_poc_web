@@ -4,7 +4,6 @@
 
 import os
 import textwrap
-from fastapi.responses import JSONResponse
 from openai import AzureOpenAI
 from sentence_transformers import SentenceTransformer
 from vectorizacion import client, COLLECTION_NAME
@@ -141,8 +140,8 @@ Fuentes PDF:
             textwrap.fill(line, width=80) for line in raw_summary.splitlines()
         )
 
-        # Devolver JSON
-        return JSONResponse(content={"answer": wrapped_summary})
+        # Devolver solo texto plano
+        return wrapped_summary
 
     except Exception as e:
-        return JSONResponse(status_code=500, content={"error": str(e)})
+        return f"Error al generar respuesta: {str(e)}"
