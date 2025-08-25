@@ -2,7 +2,6 @@
 # extrae títulos, resúmenes y enlaces, y luego genera un resumen claro y organizado
 # con ayuda de un modelo desplegado en Azure AI Foundry.
 
-from fastapi.responses import JSONResponse
 from openai import AzureOpenAI
 from typing import List, Dict
 from selenium import webdriver
@@ -59,11 +58,11 @@ def get_web_papers_selenium(query: str, max_pages: int = 2) -> List[Dict]:
     driver.quit()
     return results
 
-def get_annotated_summary(query: str):
+def get_annotated_summary(query: str) -> str:
     try:
         papers = get_web_papers_selenium(query)
         if not papers:
-            return JSONResponse(content={"answer": "No se encontraron artículos."})
+            return "No se encontraron artículos."
 
         prompt = "".join(
             f"Título: {p['title']}\nResumen: {p['snippet']}\nURL: {p['url']}\n\n" for p in papers
@@ -92,8 +91,8 @@ Analiza los siguientes artículos de Google Scholar y resume en máximo 4 párra
             textwrap.fill(line, width=80) for line in raw_summary.splitlines()
         )
 
-        # Devolver JSON
-        return JSONResponse(content={"answer": wrapped_summary})
+        # Devolver solo texto plano
+        return wrapped_summary
 
     except Exception as e:
-        return JSONResponse(status_code=500, content={"error": str(e)})
+        return f"Error al generar resumen web: {str(e)}"
