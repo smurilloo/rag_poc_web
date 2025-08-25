@@ -81,7 +81,7 @@ Analiza los siguientes artículos de Google Scholar y resume en máximo 4 párra
                 {"role": "user", "content": full_prompt}
             ],
             temperature=0.7,
-            max_tokens=800,
+            max_tokens=200,
             top_p=1.0
         )
 
@@ -96,3 +96,4 @@ Analiza los siguientes artículos de Google Scholar y resume en máximo 4 párra
 
     except Exception as e:
         return f"Error al generar resumen web: {str(e)}"
+
