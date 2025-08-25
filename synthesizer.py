@@ -48,9 +48,9 @@ def search_qdrant(query, top_k=5):
 # ===============================
 # Helper: dividir textos en chunks
 # ===============================
-def chunk_text(items, max_chars=25000):
+def chunk_text(items, max_chars=5000):
     """
-    Divide contenido en bloques que no excedan max_chars caracteres (~25k tokens).
+    Divide contenido en bloques que no excedan max_chars caracteres (~5k tokens).
     """
     chunks = []
     current_chunk = ""
@@ -96,8 +96,8 @@ def synthesize_answer(query, pdfs, pdf_metadata, memory, web_papers):
         if qdrant_results:
             content_items.extend(qdrant_results)
 
-        # Dividir en chunks de máximo 25k caracteres (~tokens)
-        text_chunks = chunk_text(content_items, max_chars=25000)
+        # Dividir en chunks de máximo 5k caracteres (~tokens)
+        text_chunks = chunk_text(content_items, max_chars=5000)
 
         summaries = []
         for chunk in text_chunks:
@@ -147,3 +147,4 @@ Responde en máximo 4 párrafos. Cita fuentes y páginas donde corresponda.
 
     except Exception as e:
         return f"Error al generar respuesta: {str(e)}"
+
