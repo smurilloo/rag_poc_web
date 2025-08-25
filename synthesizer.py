@@ -89,7 +89,6 @@ def synthesize_answer(query, pdfs, pdf_metadata, memory, web_papers):
 
         # Construir listas de contenido para chunking
         content_items = []
-
         if pdfs:
             content_items.extend(pdfs)
         if web_papers:
@@ -97,6 +96,7 @@ def synthesize_answer(query, pdfs, pdf_metadata, memory, web_papers):
         if qdrant_results:
             content_items.extend(qdrant_results)
 
+        # Dividir en chunks de máximo 25k caracteres (~tokens)
         text_chunks = chunk_text(content_items, max_chars=25000)
 
         summaries = []
@@ -105,13 +105,18 @@ def synthesize_answer(query, pdfs, pdf_metadata, memory, web_papers):
 Contexto previo:
 {memory}
 
-Consulta: {query}
+Consulta:
+{query}
 
 Información relevante:
 {chunk}
 
-Responde en máximo 4 párrafos, citando URL y título. Indica páginas (cada 500 caracteres = 1 página).
+Responde en máximo 4 párrafos. Cita fuentes y páginas donde corresponda.
 """
+            # Validar que prompt no esté vacío
+            if not prompt.strip():
+                continue
+
             response = client_aoai.chat.completions.create(
                 model=deployment,
                 messages=[
@@ -122,15 +127,22 @@ Responde en máximo 4 párrafos, citando URL y título. Indica páginas (cada 50
                 max_tokens=200,
                 top_p=1.0
             )
-            raw_summary = (
-                response.choices[0].message.content
-                if response and response.choices and response.choices[0].message
-                else "No se recibió respuesta."
-            )
+
+            # 🔑 Validación robusta de la respuesta
+            try:
+                raw_summary = (
+                    response.choices[0].message.content
+                    if response and getattr(response.choices[0], "message", None)
+                    else "No se recibió respuesta."
+                )
+                # Limpiar caracteres no JSON / invisibles
+                raw_summary = raw_summary.replace("\x00", "").strip()
+            except Exception:
+                raw_summary = "No se recibió respuesta."
+
             wrapped_summary = "\n".join(textwrap.fill(line, width=80) for line in raw_summary.splitlines())
             summaries.append(wrapped_summary.strip())
 
-        # Combinar todos los resúmenes parciales
         return "\n\n".join(summaries)
 
     except Exception as e:
