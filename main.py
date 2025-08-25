@@ -40,27 +40,39 @@ async def ask(request: Request):
         data = await request.json()
         question = data.get("question", "").strip()
     except Exception:
-        return JSONResponse(content={"answer": "Error leyendo el request, envía un JSON válido."}, status_code=400)
+        return JSONResponse(
+            content={"answer": "Error leyendo el request, envía un JSON válido."},
+            status_code=400
+        )
 
     if not question:
-        return JSONResponse(content={"answer": "Por favor ingresa una consulta válida."}, status_code=400)
+        return JSONResponse(
+            content={"answer": "Por favor ingresa una consulta válida."},
+            status_code=400
+        )
 
     try:
         # Recuperar PDFs
         pdf_texts_by_pages, pdf_metadata = load_pdfs_azure()
+
         # Buscar papers web
         web_papers = get_web_papers_selenium(question)
+
         # Indexar
         index_pdf_chunks(pdf_texts_by_pages)
         index_web_papers(web_papers)
+
         # Recuperar memoria contextual
         memory = memory_keeper.get_context()
-        # Generar respuesta
+
+        # Generar respuesta con Azure OpenAI
         answer = synthesize_answer(question, pdf_texts_by_pages, pdf_metadata, memory, web_papers)
+
+        # Guardar en memoria
         memory_keeper.remember(question, answer)
 
-        #  Respuesta limpia en JSON serializable
-        return {"answer": answer}
+        # Respuesta JSON serializable
+        return JSONResponse(content={"answer": answer})
 
     except Exception as e:
-        return {"answer": f"Error procesando la consulta: {str(e)}"}
+        return JSONResponse(content={"answer": f"Error procesando la consulta: {str(e)}"})
