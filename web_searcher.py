@@ -50,7 +50,7 @@ def get_web_papers_selenium(query: str, max_pages: int = 2) -> List[Dict]:
                 url = title_elem.get_attribute("href")
                 snippet_elem = art.find_elements(By.CLASS_NAME, "gs_rs")
                 snippet = snippet_elem[0].text.strip() if snippet_elem else "No hay resumen disponible."
-                results.append({"title": title, "url": url, "snippet": snippet})
+                results.append({"title": title, "url": url, "snippet": snippet, "page": 1})
             except Exception:
                 continue
     driver.quit()
@@ -60,14 +60,10 @@ def get_web_papers_selenium(query: str, max_pages: int = 2) -> List[Dict]:
 # Función para resumir con límite de tokens
 # ---------------------------
 def chunk_text_for_tokens(items: List[Dict], max_chars: int = 5000) -> List[str]:
-    """
-    Divide la información de los papers o PDFs en bloques que no excedan max_chars caracteres.
-    Aproximadamente 4 tokens por caracter en inglés, así max_chars ~ 5k tokens.
-    """
     chunks = []
     current_chunk = ""
     for item in items:
-        snippet_text = f"Título: {item['title']}\nResumen: {item['snippet']}\nURL: {item['url']}\n\n"
+        snippet_text = f"Título: {item['title']}\nResumen: {item.get('snippet', item.get('content',''))}\nURL: {item['url']}\n\n"
         if len(current_chunk) + len(snippet_text) > max_chars:
             if current_chunk:
                 chunks.append(current_chunk)
