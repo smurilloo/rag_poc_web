@@ -77,7 +77,7 @@ def wait_until_collection_ready(max_retries=10, delay=2):
     raise TimeoutError(f"❌ Colección '{COLLECTION_NAME}' no lista después de {max_retries*delay}s")
 
 def get_id(text: str) -> int:
-    """Genera un ID único a partir del texto"""
+    """Genera un ID único a partir del contenido (PDF page text o URL)"""
     return int(hashlib.sha256(text.encode("utf-8")).hexdigest(), 16) % (10**16)
 
 def _upsert_points(points: list[PointStruct], batch_size=50):
@@ -87,8 +87,7 @@ def _upsert_points(points: list[PointStruct], batch_size=50):
         return
     try:
         for i in range(0, len(points), batch_size):
-            batch = points[i:i+batch_size]
-            client.upsert(collection_name=COLLECTION_NAME, points=batch)
+            client.upsert(collection_name=COLLECTION_NAME, points=points[i:i+batch_size])
         logger.info(f"✅ Se insertaron {len(points)} puntos en Qdrant")
     except Exception as e:
         logger.error(f"❌ Error al insertar puntos: {e}")
@@ -102,7 +101,7 @@ def _filter_existing_ids(ids: list[int]) -> list[int]:
             resp = client.retrieve(collection_name=COLLECTION_NAME, ids=batch_ids)
             existing_ids.update(p.id for p in resp)
     except Exception as e:
-        logger.error(f"⚠️ No se pudo filtrar IDs existentes: {e}")
+        logger.warning(f"⚠️ No se pudo filtrar IDs existentes: {e}")
     return [id_ for id_ in ids if id_ not in existing_ids]
 
 # ===============================
@@ -119,7 +118,7 @@ def index_pdf_chunks(pdf_data: list[dict]):
             content = page["text"].strip()
             if not content:
                 continue
-            uid = get_id(content)
+            uid = get_id(content) 
             ids_to_check.append(uid)
             points.append(PointStruct(
                 id=uid,
