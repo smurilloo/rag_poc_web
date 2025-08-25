@@ -1,39 +1,42 @@
-# Este código lee todos los archivos PDF en la carpeta del proyecto, extrae el texto de cada página,
-# identifica los títulos y organiza la información para que pueda ser usada en respuestas o análisis.
-# También resume las páginas leídas en rangos para mostrar de forma clara qué páginas se usaron.
-
 import os
 import tempfile
 from azure.storage.blob import ContainerClient
 from PyPDF2 import PdfReader
+from vectorizacion import index_pdf_chunks  # Para indexar solo nuevos PDFs
 
 # Configuración desde variables de entorno
 container_url = os.getenv("AZURE_STORAGE_SAS_TOKEN")
 if not container_url:
     raise ValueError("❌ Falta AZURE_STORAGE_SAS_TOKEN")
 
-# Inicializar cliente de contenedor directamente con la URL SAS completa
 container_client = ContainerClient.from_container_url(f"{container_url}")
 
-# ------------------------
-# FUNCIONES DE CARGA DE PDF
-# ------------------------
+# Cache local para PDFs ya procesados
+PDF_CACHE = {}
 
 def load_pdfs_azure():
     pdfs = []
     metadatas = []
 
     try:
-        blobs = container_client.list_blobs(name_starts_with="BD_Knowledge")
+        blobs = list(container_client.list_blobs(name_starts_with="BD_Knowledge"))
     except Exception as e:
         raise RuntimeError(f"❌ Error al listar blobs en BD_Knowledge: {e}")
+
+    new_pdfs_to_index = []
 
     for blob in blobs:
         if not blob.name.endswith(".pdf"):
             continue
 
-        print(f"📥 Descargando: {blob.name}")
+        # Si ya está en cache, usarlo
+        if blob.name in PDF_CACHE:
+            pdf_data, metadata = PDF_CACHE[blob.name]
+            pdfs.append(pdf_data)
+            metadatas.append(metadata)
+            continue
 
+        print(f"📥 Descargando: {blob.name}")
         try:
             with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as temp_pdf:
                 downloader = container_client.download_blob(blob.name)
@@ -57,27 +60,38 @@ def load_pdfs_azure():
             if pages_texts:
                 title = pages_texts[0]["text"].split("\n")[0].strip()
                 filename = os.path.basename(blob.name)
-
-                pdfs.append({
+                pdf_data = {
                     "filename": filename,
                     "title": title,
                     "pages_texts": pages_texts
-                })
-
-                metadatas.append({
+                }
+                metadata = {
                     "filename": filename,
                     "title": title,
                     "pages": compress_page_ranges(pages_numbers)
-                })
+                }
+
+                # Guardar en cache
+                PDF_CACHE[blob.name] = (pdf_data, metadata)
+
+                pdfs.append(pdf_data)
+                metadatas.append(metadata)
+
+                # Añadir a la lista de nuevos PDFs a indexar
+                new_pdfs_to_index.append(pdf_data)
 
         except Exception as e:
             print(f"⚠️ Error procesando PDF {blob.name}: {e}")
-
         finally:
             if os.path.exists(temp_pdf_path):
                 os.remove(temp_pdf_path)
 
+    # Solo indexar PDFs nuevos en Qdrant
+    if new_pdfs_to_index:
+        index_pdf_chunks(new_pdfs_to_index)
+
     return pdfs, metadatas
+
 
 def compress_page_ranges(pages):
     if not pages:
@@ -85,16 +99,15 @@ def compress_page_ranges(pages):
     pages = sorted(set(pages))
     ranges = []
     start = prev = pages[0]
-
     for p in pages[1:]:
         if p == prev + 1:
             prev = p
         else:
-            ranges.append(f"{start}-{prev}" if start != prev else f"{start}")
+            ranges.append(f"{start}-{prev}" if start != prev else str(start))
             start = prev = p
-
-    ranges.append(f"{start}-{prev}" if start != prev else f"{start}")
+    ranges.append(f"{start}-{prev}" if start != prev else str(start))
     return ",".join(ranges)
+
 
 # Otros proveedores de nube
 def load_pdfs_google():
