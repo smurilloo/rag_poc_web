@@ -13,7 +13,7 @@ from vectorizacion import client, COLLECTION_NAME
 # ===============================
 api_key = os.getenv("OPEN_AI_API_KEY_1")
 endpoint = os.getenv("OPEN_AI_ENDPOINT")
-deployment = os.getenv("OPEN_AI_DEPLOYMENT") 
+deployment = os.getenv("OPEN_AI_DEPLOYMENT")  # Ej: "gpt-35-turbo"
 
 if not api_key or not endpoint or not deployment:
     raise ValueError("Faltan variables de entorno OPEN_AI_API_KEY_1, OPEN_AI_ENDPOINT o OPEN_AI_DEPLOYMENT")
@@ -121,7 +121,7 @@ Fuentes PDF:
 {qdrant_section}
 """
 
-    #Aquí está la corrección: usar deployment_name en lugar de model
+    # Llamada a Azure OpenAI con el deployment configurado
     response = client_aoai.chat.completions.create(
         model=deployment,
         messages=[
@@ -130,6 +130,7 @@ Fuentes PDF:
         ],
         max_tokens=800,
         temperature=0.7,
+        top_p=1.0
     )
 
     raw_summary = response.choices[0].message.content if response and response.choices else "No se recibió respuesta."
@@ -138,4 +139,3 @@ Fuentes PDF:
         textwrap.fill(line, width=80) for line in raw_summary.splitlines()
     )
     return wrapped_summary
-
