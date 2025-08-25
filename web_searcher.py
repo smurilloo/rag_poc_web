@@ -59,10 +59,10 @@ def get_web_papers_selenium(query: str, max_pages: int = 2) -> List[Dict]:
 # ---------------------------
 # Función para resumir con límite de tokens
 # ---------------------------
-def chunk_text_for_tokens(items: List[Dict], max_chars: int = 25000) -> List[str]:
+def chunk_text_for_tokens(items: List[Dict], max_chars: int = 5000) -> List[str]:
     """
     Divide la información de los papers o PDFs en bloques que no excedan max_chars caracteres.
-    Aproximadamente 4 tokens por caracter en inglés, así max_chars ~ 25k tokens.
+    Aproximadamente 4 tokens por caracter en inglés, así max_chars ~ 5k tokens.
     """
     chunks = []
     current_chunk = ""
@@ -87,37 +87,42 @@ def get_annotated_summary(query: str) -> str:
         if not papers:
             return "No se encontraron artículos."
 
-        # Dividir en chunks para no exceder 25k tokens
-        text_chunks = chunk_text_for_tokens(papers, max_chars=25000)
-
+        text_chunks = chunk_text_for_tokens(papers, max_chars=5000)
         summaries = []
+
         for chunk in text_chunks:
             full_prompt = f"""
 Analiza los siguientes artículos de Google Scholar y resume en máximo 4 párrafos:
 
 {chunk}
 """
+            if not full_prompt.strip():
+                continue
+
             response = client.chat.completions.create(
                 model=deployment,
                 messages=[
-                    {"role": "system", "content": "Eres un asistente útil que resume papers académicos."},
+                    {"role": "system", "content": "Eres un asistente que resume papers académicos."},
                     {"role": "user", "content": full_prompt}
                 ],
                 temperature=0.7,
                 max_tokens=200,
                 top_p=1.0
             )
-            raw_summary = (
-                response.choices[0].message.content
-                if response and response.choices and response.choices[0].message
-                else "No se recibió respuesta."
-            )
-            wrapped_summary = "\n".join(
-                textwrap.fill(line, width=80) for line in raw_summary.splitlines()
-            )
+
+            try:
+                raw_summary = (
+                    response.choices[0].message.content
+                    if response and getattr(response.choices[0], "message", None)
+                    else "No se recibió respuesta."
+                )
+                raw_summary = raw_summary.replace("\x00", "").strip()
+            except Exception:
+                raw_summary = "No se recibió respuesta."
+
+            wrapped_summary = "\n".join(textwrap.fill(line, width=80) for line in raw_summary.splitlines())
             summaries.append(wrapped_summary.strip())
 
-        # Combinar todos los resúmenes en un único string final
         return "\n\n".join(summaries)
 
     except Exception as e:
