@@ -1,7 +1,3 @@
-# Este código busca artículos científicos en Google Scholar usando web Scrapping con Selenium,
-# extrae títulos, resúmenes y enlaces, y luego genera un resumen claro y organizado
-# con ayuda de un modelo desplegado en Azure AI Foundry.
-
 from openai import AzureOpenAI
 from typing import List, Dict
 from selenium import webdriver
@@ -26,9 +22,11 @@ client = AzureOpenAI(
     azure_endpoint=endpoint
 )
 
+# ---------------------------
+# Funciones de búsqueda web
+# ---------------------------
 def get_web_papers_selenium(query: str, max_pages: int = 2) -> List[Dict]:
     base_url = "https://scholar.google.com/scholar"
-
     options = Options()
     options.add_argument("--headless=new")
     options.add_argument("--no-sandbox")
@@ -58,45 +56,69 @@ def get_web_papers_selenium(query: str, max_pages: int = 2) -> List[Dict]:
     driver.quit()
     return results
 
+# ---------------------------
+# Función para resumir con límite de tokens
+# ---------------------------
+def chunk_text_for_tokens(items: List[Dict], max_chars: int = 25000) -> List[str]:
+    """
+    Divide la información de los papers o PDFs en bloques que no excedan max_chars caracteres.
+    Aproximadamente 4 tokens por caracter en inglés, así max_chars ~ 25k tokens.
+    """
+    chunks = []
+    current_chunk = ""
+    for item in items:
+        snippet_text = f"Título: {item['title']}\nResumen: {item['snippet']}\nURL: {item['url']}\n\n"
+        if len(current_chunk) + len(snippet_text) > max_chars:
+            if current_chunk:
+                chunks.append(current_chunk)
+            current_chunk = snippet_text
+        else:
+            current_chunk += snippet_text
+    if current_chunk:
+        chunks.append(current_chunk)
+    return chunks
+
+# ---------------------------
+# Función de resumen final
+# ---------------------------
 def get_annotated_summary(query: str) -> str:
     try:
         papers = get_web_papers_selenium(query)
         if not papers:
             return "No se encontraron artículos."
 
-        prompt = "".join(
-            f"Título: {p['title']}\nResumen: {p['snippet']}\nURL: {p['url']}\n\n" for p in papers
-        )
+        # Dividir en chunks para no exceder 25k tokens
+        text_chunks = chunk_text_for_tokens(papers, max_chars=25000)
 
-        full_prompt = f"""
+        summaries = []
+        for chunk in text_chunks:
+            full_prompt = f"""
 Analiza los siguientes artículos de Google Scholar y resume en máximo 4 párrafos:
 
-{prompt}
+{chunk}
 """
+            response = client.chat.completions.create(
+                model=deployment,
+                messages=[
+                    {"role": "system", "content": "Eres un asistente útil que resume papers académicos."},
+                    {"role": "user", "content": full_prompt}
+                ],
+                temperature=0.7,
+                max_tokens=200,
+                top_p=1.0
+            )
+            raw_summary = (
+                response.choices[0].message.content
+                if response and response.choices and response.choices[0].message
+                else "No se recibió respuesta."
+            )
+            wrapped_summary = "\n".join(
+                textwrap.fill(line, width=80) for line in raw_summary.splitlines()
+            )
+            summaries.append(wrapped_summary.strip())
 
-        response = client.chat.completions.create(
-            model=deployment,
-            messages=[
-                {"role": "system", "content": "Eres un asistente útil que resume papers académicos."},
-                {"role": "user", "content": full_prompt}
-            ],
-            temperature=0.7,
-            max_tokens=200,
-            top_p=1.0
-        )
-
-        # 🔑 Extraer siempre solo el contenido
-        raw_summary = (
-            response.choices[0].message.content
-            if response and response.choices and response.choices[0].message
-            else "No se recibió respuesta."
-        )
-
-        wrapped_summary = "\n".join(
-            textwrap.fill(line, width=80) for line in raw_summary.splitlines()
-        )
-
-        return wrapped_summary.strip()
+        # Combinar todos los resúmenes en un único string final
+        return "\n\n".join(summaries)
 
     except Exception as e:
         return f"Error al generar resumen web: {str(e)}"
