@@ -9,7 +9,7 @@ from web_searcher import get_web_papers_selenium
 from vectorizacion import (
     index_pdf_chunks,
     index_web_papers,
-    ensure_collection 
+    ensure_collection
 )
 
 app = FastAPI()
@@ -32,30 +32,35 @@ async def startup_event():
 async def root():
     html_path = Path(__file__).parent / "static" / "index.html"
     with open(html_path, "r", encoding="utf-8") as f:
-        return HTMLResponse(content=f.read())
+        return f.read()
 
 @app.post("/ask")
 async def ask(request: Request):
-    data = await request.json()
-    question = data.get("question", "").strip()
+    try:
+        data = await request.json()
+        question = data.get("question", "").strip()
+    except Exception:
+        return JSONResponse(content={"answer": "Error leyendo el request, envía un JSON válido."}, status_code=400)
 
     if not question:
         return JSONResponse(content={"answer": "Por favor ingresa una consulta válida."}, status_code=400)
 
     try:
+        # Recuperar PDFs
         pdf_texts_by_pages, pdf_metadata = load_pdfs_azure()
+        # Buscar papers web
         web_papers = get_web_papers_selenium(question)
+        # Indexar
         index_pdf_chunks(pdf_texts_by_pages)
         index_web_papers(web_papers)
+        # Recuperar memoria contextual
         memory = memory_keeper.get_context()
+        # Generar respuesta
         answer = synthesize_answer(question, pdf_texts_by_pages, pdf_metadata, memory, web_papers)
         memory_keeper.remember(question, answer)
 
-        return JSONResponse(content={"answer": answer})
+        #  Respuesta limpia en JSON serializable
+        return {"answer": answer}
 
     except Exception as e:
-        return JSONResponse(
-            content={"answer": f"Error procesando la consulta: {str(e)}"},
-            status_code=500
-        )
-
+        return {"answer": f"Error procesando la consulta: {str(e)}"}
