@@ -74,7 +74,7 @@ Analiza los siguientes artículos de Google Scholar y resume en máximo 4 párra
 """
 
     response = client.chat.completions.create(
-        deployment_id=deployment, 
+        model=deployment, 
         messages=[
             {"role": "system", "content": "Eres un asistente útil que resume papers académicos."},
             {"role": "user", "content": full_prompt}
@@ -89,5 +89,6 @@ Analiza los siguientes artículos de Google Scholar y resume en máximo 4 párra
         textwrap.fill(line, width=80) for line in raw_summary.splitlines()
     )
     return wrapped_summary
+
 
 
