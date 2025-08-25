@@ -2,6 +2,7 @@
 # extrae títulos, resúmenes y enlaces, y luego genera un resumen claro y organizado
 # con ayuda de un modelo desplegado en Azure AI Foundry.
 
+from fastapi.responses import JSONResponse
 from openai import AzureOpenAI
 from typing import List, Dict
 from selenium import webdriver
@@ -58,35 +59,41 @@ def get_web_papers_selenium(query: str, max_pages: int = 2) -> List[Dict]:
     driver.quit()
     return results
 
-def get_annotated_summary(query: str) -> str:
-    papers = get_web_papers_selenium(query)
-    if not papers:
-        return "No se encontraron artículos."
+def get_annotated_summary(query: str):
+    try:
+        papers = get_web_papers_selenium(query)
+        if not papers:
+            return JSONResponse(content={"answer": "No se encontraron artículos."})
 
-    prompt = "".join(
-        f"Título: {p['title']}\nResumen: {p['snippet']}\nURL: {p['url']}\n\n" for p in papers
-    )
+        prompt = "".join(
+            f"Título: {p['title']}\nResumen: {p['snippet']}\nURL: {p['url']}\n\n" for p in papers
+        )
 
-    full_prompt = f"""
+        full_prompt = f"""
 Analiza los siguientes artículos de Google Scholar y resume en máximo 4 párrafos:
 
 {prompt}
 """
 
-    response = client.chat.completions.create(
-        model=deployment,
-        messages=[
-            {"role": "system", "content": "Eres un asistente útil que resume papers académicos."},
-            {"role": "user", "content": full_prompt}
-        ],
-        temperature=0.7,
-        max_tokens=800,
-        top_p=1.0
-    )
+        response = client.chat.completions.create(
+            model=deployment,
+            messages=[
+                {"role": "system", "content": "Eres un asistente útil que resume papers académicos."},
+                {"role": "user", "content": full_prompt}
+            ],
+            temperature=0.7,
+            max_tokens=800,
+            top_p=1.0
+        )
 
-    raw_summary = response.choices[0].message.content if response and response.choices else "No se recibió respuesta."
+        raw_summary = response.choices[0].message.content if response and response.choices else "No se recibió respuesta."
 
-    wrapped_summary = "\n".join(
-        textwrap.fill(line, width=80) for line in raw_summary.splitlines()
-    )
-    return wrapped_summary
+        wrapped_summary = "\n".join(
+            textwrap.fill(line, width=80) for line in raw_summary.splitlines()
+        )
+
+        # Devolver JSON
+        return JSONResponse(content={"answer": wrapped_summary})
+
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"error": str(e)})
