@@ -133,7 +133,7 @@ Responde en máximo 4 párrafos. Cita fuentes y páginas donde corresponda.
                     {"role": "user", "content": prompt}
                 ],
                 temperature=0.7,
-                max_tokens=200,
+                max_tokens=400,
                 top_p=1.0
             )
 
@@ -157,3 +157,4 @@ Responde en máximo 4 párrafos. Cita fuentes y páginas donde corresponda.
 
     except Exception as e:
         return json.dumps({"content": f"Error al generar respuesta: {str(e)}", "role": "assistant"})
+
