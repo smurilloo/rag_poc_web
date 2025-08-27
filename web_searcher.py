@@ -4,7 +4,6 @@ from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 import time
-import textwrap
 import os
 import json
 
@@ -51,16 +50,17 @@ def get_web_papers_selenium(query: str, max_pages: int = 2) -> List[Dict]:
                 url = title_elem.get_attribute("href")
                 snippet_elem = art.find_elements(By.CLASS_NAME, "gs_rs")
                 snippet = snippet_elem[0].text.strip() if snippet_elem else "No hay resumen disponible."
-                results.append({"title": title, "url": url, "snippet": snippet, "page": 1})
+                results.append({"title": title, "url": url, "snippet": snippet, "page": page + 1})
             except Exception:
                 continue
     driver.quit()
     return results
 
 # ---------------------------
-# Función para resumir con límite de tokens
+# División segura de texto
 # ---------------------------
-def chunk_text_for_tokens(items: List[Dict], max_chars: int = 5000) -> List[str]:
+def chunk_text_for_tokens(items: List[Dict], max_chars: int = 2000) -> List[str]:
+    """Divide los resultados en bloques pequeños (máx 2000 caracteres)."""
     chunks = []
     current_chunk = ""
     for item in items:
@@ -76,23 +76,23 @@ def chunk_text_for_tokens(items: List[Dict], max_chars: int = 5000) -> List[str]
     return chunks
 
 # ---------------------------
-# Función de resumen final
+# Resumen seguro
 # ---------------------------
 def get_annotated_summary(query: str) -> str:
     """
     Devuelve SIEMPRE un string JSON con la forma:
     {"content": "<texto>", "role": "assistant"}
-    para evitar errores de parseo.
     """
     try:
         papers = get_web_papers_selenium(query)
         if not papers:
             return json.dumps({"content": "No se encontraron artículos.", "role": "assistant"}, ensure_ascii=False)
 
-        text_chunks = chunk_text_for_tokens(papers, max_chars=5000)
-        # Usamos solo el primer chunk para construir un ÚNICO mensaje y retornarlo en JSON.
+        text_chunks = chunk_text_for_tokens(papers, max_chars=2000)
+
+        # Tomamos solo el primer chunk para evitar sobrepasar contexto
         full_prompt = f"""
-Analiza los siguientes artículos de Google Scholar y resume en máximo 4 párrafos:
+Analiza los siguientes artículos de Google Scholar y resume en máximo 3 párrafos:
 
 {text_chunks[0]}
 """.strip()
@@ -104,18 +104,15 @@ Analiza los siguientes artículos de Google Scholar y resume en máximo 4 párra
                 {"role": "user", "content": full_prompt}
             ],
             temperature=0.7,
-            max_tokens=200,
+            max_tokens=300,  
             top_p=1.0
         )
 
-        # Extraemos SOLO el mensaje del asistente
         msg = getattr(response.choices[0], "message", None)
         content = (msg.content if msg and getattr(msg, "content", None) else "No se recibió respuesta.").replace("\x00", "").strip()
         role = (msg.role if msg and getattr(msg, "role", None) else "assistant")
 
-        # Retornamos EXCLUSIVAMENTE JSON (sin texto adicional)
         return json.dumps({"content": content, "role": role}, ensure_ascii=False)
 
     except Exception:
-        # En cualquier error, seguimos devolviendo JSON válido
         return json.dumps({"content": "No se recibió respuesta.", "role": "assistant"}, ensure_ascii=False)
