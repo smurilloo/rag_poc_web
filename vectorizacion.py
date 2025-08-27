@@ -83,7 +83,7 @@ def get_id(text: str) -> int:
 def _upsert_points(points: list[PointStruct], batch_size=50):
     """Inserta los puntos en batches"""
     if not points:
-        logger.warning("⚠️ No hay puntos para insertar")
+        logger.info("ℹ️ No hay puntos nuevos para insertar")
         return
     try:
         for i in range(0, len(points), batch_size):
@@ -92,8 +92,8 @@ def _upsert_points(points: list[PointStruct], batch_size=50):
     except Exception as e:
         logger.error(f"❌ Error al insertar puntos: {e}")
 
-def _filter_existing_ids(ids: list[int]) -> list[int]:
-    """Devuelve solo los IDs que aún no existen en la colección"""
+def _filter_existing_ids(ids: list[int]) -> set[int]:
+    """Devuelve los IDs que ya existen en la colección"""
     existing_ids = set()
     try:
         for i in range(0, len(ids), 100):
@@ -102,7 +102,7 @@ def _filter_existing_ids(ids: list[int]) -> list[int]:
             existing_ids.update(p.id for p in resp)
     except Exception as e:
         logger.warning(f"⚠️ No se pudo filtrar IDs existentes: {e}")
-    return [id_ for id_ in ids if id_ not in existing_ids]
+    return existing_ids
 
 # ===============================
 # Funciones principales
@@ -110,60 +110,81 @@ def _filter_existing_ids(ids: list[int]) -> list[int]:
 def index_pdf_chunks(pdf_data: list[dict]):
     """Indexa el contenido de PDFs en Qdrant"""
     ensure_collection()
-    points = []
-    ids_to_check = []
 
+    # Calcular IDs de todo el batch
+    id_to_content = {}
     for doc in pdf_data:
         for page in doc["pages_texts"]:
             content = page["text"].strip()
             if not content:
                 continue
-            uid = get_id(content) 
-            ids_to_check.append(uid)
-            points.append(PointStruct(
-                id=uid,
-                vector=encoder.encode(content).tolist(),
-                payload={
-                    "type": "pdf",
-                    "filename": doc["filename"],
-                    "title": doc["title"],
-                    "page": page["page"],
-                    "content": content
-                }
-            ))
+            uid = get_id(content)
+            id_to_content[uid] = {
+                "filename": doc["filename"],
+                "title": doc["title"],
+                "page": page["page"],
+                "content": content,
+            }
 
-    # Insertar solo puntos nuevos
-    new_ids = _filter_existing_ids(ids_to_check)
-    new_points = [p for p in points if p.id in new_ids]
+    # Filtrar solo los que NO existen
+    existing_ids = _filter_existing_ids(list(id_to_content.keys()))
+    new_ids = set(id_to_content.keys()) - existing_ids
+
+    # Generar solo los puntos nuevos
+    new_points = [
+        PointStruct(
+            id=uid,
+            vector=encoder.encode(data["content"]).tolist(),
+            payload={
+                "type": "pdf",
+                "filename": data["filename"],
+                "title": data["title"],
+                "page": data["page"],
+                "content": data["content"]
+            }
+        )
+        for uid, data in id_to_content.items() if uid in new_ids
+    ]
+
     _upsert_points(new_points)
 
 def index_web_papers(web_papers: list[dict]):
     """Indexa papers web en Qdrant"""
     ensure_collection()
-    points = []
-    ids_to_check = []
 
+    id_to_paper = {}
     for paper in web_papers:
         snippet = paper["snippet"].strip()
         if not snippet:
             continue
         uid = get_id(paper["url"])
-        ids_to_check.append(uid)
-        points.append(PointStruct(
+        id_to_paper[uid] = {
+            "url": paper["url"],
+            "title": paper["title"],
+            "page": 1,
+            "score": paper.get("score", 0),
+            "content": snippet,
+        }
+
+    existing_ids = _filter_existing_ids(list(id_to_paper.keys()))
+    new_ids = set(id_to_paper.keys()) - existing_ids
+
+    new_points = [
+        PointStruct(
             id=uid,
-            vector=encoder.encode(snippet).tolist(),
+            vector=encoder.encode(data["content"]).tolist(),
             payload={
                 "type": "web",
-                "url": paper["url"],
-                "title": paper["title"],
-                "page": 1,
-                "score": paper.get("score", 0),
-                "content": snippet
+                "url": data["url"],
+                "title": data["title"],
+                "page": data["page"],
+                "score": data["score"],
+                "content": data["content"]
             }
-        ))
+        )
+        for uid, data in id_to_paper.items() if uid in new_ids
+    ]
 
-    new_ids = _filter_existing_ids(ids_to_check)
-    new_points = [p for p in points if p.id in new_ids]
     _upsert_points(new_points)
 
 def search_qdrant(query: str, top_k: int = 5) -> list[dict]:
