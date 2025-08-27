@@ -3,6 +3,7 @@ import tempfile
 from azure.storage.blob import ContainerClient
 from PyPDF2 import PdfReader
 from qdrant_client import QdrantClient
+from qdrant_client.http import models
 from vectorizacion import index_pdf_chunks
 
 # ===============================
@@ -22,37 +23,30 @@ if not container_url:
 container_client = ContainerClient.from_container_url(f"{container_url}")
 qdrant_client = QdrantClient(url=QDRANT_URL, api_key=QDRANT_API_KEY)
 
-
 # ===============================
 # Utilidades
 # ===============================
-def get_indexed_filenames():
+def is_filename_indexed(filename: str) -> bool:
     """
-    Consulta a Qdrant para obtener los filenames ya cargados en la colección.
-    Retorna un set con los nombres.
+    Verifica en Qdrant si un filename ya está indexado.
+    Retorna True si existe, False si no.
     """
     try:
-        indexed = set()
-        scroll = qdrant_client.scroll(
+        result, _ = qdrant_client.scroll(
             collection_name=QDRANT_COLLECTION,
-            scroll_filter=None,
-            limit=100,
-            with_payload=True
+            scroll_filter=models.Filter(
+                must=[models.FieldCondition(
+                    key="filename",
+                    match=models.MatchValue(value=filename)
+                )]
+            ),
+            limit=1,
+            with_payload=False
         )
-        while scroll[0]:
-            for point in scroll[0]:
-                if "filename" in point.payload:
-                    indexed.add(point.payload["filename"])
-            scroll = qdrant_client.scroll(
-                collection_name=QDRANT_COLLECTION,
-                offset=scroll[1],
-                limit=100,
-                with_payload=True
-            )
-        return indexed
+        return len(result) > 0
     except Exception as e:
-        print(f"⚠️ Error consultando Qdrant: {e}")
-        return set()
+        print(f"⚠️ Error verificando filename en Qdrant: {e}")
+        return False
 
 
 def compress_page_ranges(pages):
@@ -71,7 +65,6 @@ def compress_page_ranges(pages):
     ranges.append(f"{start}-{prev}" if start != prev else str(start))
     return ",".join(ranges)
 
-
 # ===============================
 # Carga e indexación de PDFs
 # ===============================
@@ -82,23 +75,21 @@ def load_pdfs_azure():
     """
     pdfs = []
     metadatas = []
-
-    indexed_filenames = get_indexed_filenames()
-    print(f"📂 Archivos ya indexados en Qdrant: {len(indexed_filenames)}")
+    new_pdfs_to_index = []
 
     try:
         blobs = list(container_client.list_blobs(name_starts_with="BD_Knowledge"))
     except Exception as e:
         raise RuntimeError(f"❌ Error al listar blobs en BD_Knowledge: {e}")
 
-    new_pdfs_to_index = []
-
     for blob in blobs:
         if not blob.name.endswith(".pdf"):
             continue
 
         filename = os.path.basename(blob.name)
-        if filename in indexed_filenames:
+
+        # ⚡ Consulta puntual a Qdrant en vez de full scan
+        if is_filename_indexed(filename):
             print(f"✅ Ya existe en Qdrant, omitiendo descarga: {filename}")
             continue
 
@@ -151,4 +142,3 @@ def load_pdfs_azure():
         print(f"📌 Indexados {len(new_pdfs_to_index)} nuevos PDFs en Qdrant")
 
     return pdfs, metadatas
-
