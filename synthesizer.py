@@ -48,9 +48,9 @@ def search_qdrant(query, top_k=5):
 # ===============================
 # Helper: dividir textos en chunks
 # ===============================
-def chunk_text(items, max_chars=5000):
+def chunk_text(items, max_chars=2000):  # reducido para evitar exceso de tokens
     """
-    Divide contenido en bloques que no excedan max_chars caracteres (~5k tokens).
+    Divide contenido en bloques que no excedan max_chars caracteres (~500 tokens aprox).
     """
     chunks = []
     current_chunk = ""
@@ -98,14 +98,17 @@ def synthesize_answer(query, pdfs, pdf_metadata, memory, web_papers):
         if qdrant_results:
             content_items.extend(qdrant_results)
 
-        # Dividir en chunks de máximo 5k caracteres
-        text_chunks = chunk_text(content_items, max_chars=5000)
+        # Dividir en chunks más pequeños
+        text_chunks = chunk_text(content_items, max_chars=2000)
+
+        # Limitar memoria para no romper límite de tokens
+        memory_safe = memory[-2000:] if memory else ""
 
         summaries = []
         for chunk in text_chunks:
             prompt = f"""
 Contexto previo:
-{memory}
+{memory_safe}
 
 Consulta:
 {query}
@@ -115,6 +118,11 @@ Información relevante:
 
 Responde en máximo 4 párrafos. Cita fuentes y páginas donde corresponda.
 """
+
+            # Si prompt excede 6000 caracteres, lo recortamos
+            if len(prompt) > 6000:
+                prompt = prompt[:6000]
+
             if not prompt.strip():
                 continue
 
@@ -130,7 +138,6 @@ Responde en máximo 4 párrafos. Cita fuentes y páginas donde corresponda.
             )
 
             try:
-                # Ajuste synthesizer.py → forzar salida JSON válida
                 raw_summary = (
                     json.dumps(
                         response.choices[0].message.to_dict(),
