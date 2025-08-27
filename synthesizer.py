@@ -1,5 +1,5 @@
 import os
-import textwrap
+import json
 from openai import AzureOpenAI
 from sentence_transformers import SentenceTransformer
 from vectorizacion import client, COLLECTION_NAME
@@ -130,19 +130,23 @@ Responde en máximo 4 párrafos. Cita fuentes y páginas donde corresponda.
             )
 
             try:
+                # Ajuste synthesizer.py → forzar salida JSON válida
                 raw_summary = (
-                    response.choices[0].message.content
+                    json.dumps(
+                        response.choices[0].message.to_dict(),
+                        ensure_ascii=False
+                    )
                     if response and getattr(response.choices[0], "message", None)
-                    else "No se recibió respuesta."
+                    else '{"content":"No se recibió respuesta.","role":"assistant"}'
                 )
                 raw_summary = raw_summary.replace("\x00", "").strip()
             except Exception:
-                raw_summary = "No se recibió respuesta."
+                raw_summary = '{"content":"No se recibió respuesta.","role":"assistant"}'
 
-            wrapped_summary = "\n".join(textwrap.fill(line, width=80) for line in raw_summary.splitlines())
-            summaries.append(wrapped_summary.strip())
+            summaries.append(raw_summary)
 
-        return "\n\n".join(summaries)
+        # Combinar todas las respuestas JSON en una lista
+        return "[" + ",".join(summaries) + "]"
 
     except Exception as e:
-        return f"Error al generar respuesta: {str(e)}"
+        return json.dumps({"content": f"Error al generar respuesta: {str(e)}", "role": "assistant"})
