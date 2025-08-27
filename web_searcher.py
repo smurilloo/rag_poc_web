@@ -6,6 +6,7 @@ from selenium.webdriver.common.by import By
 import time
 import textwrap
 import os
+import json
 
 # Configuración desde variables de entorno
 api_key = os.getenv("OPEN_AI_API_KEY_1")
@@ -78,48 +79,43 @@ def chunk_text_for_tokens(items: List[Dict], max_chars: int = 5000) -> List[str]
 # Función de resumen final
 # ---------------------------
 def get_annotated_summary(query: str) -> str:
+    """
+    Devuelve SIEMPRE un string JSON con la forma:
+    {"content": "<texto>", "role": "assistant"}
+    para evitar errores de parseo.
+    """
     try:
         papers = get_web_papers_selenium(query)
         if not papers:
-            return "No se encontraron artículos."
+            return json.dumps({"content": "No se encontraron artículos.", "role": "assistant"}, ensure_ascii=False)
 
         text_chunks = chunk_text_for_tokens(papers, max_chars=5000)
-        summaries = []
-
-        for chunk in text_chunks:
-            full_prompt = f"""
+        # Usamos solo el primer chunk para construir un ÚNICO mensaje y retornarlo en JSON.
+        full_prompt = f"""
 Analiza los siguientes artículos de Google Scholar y resume en máximo 4 párrafos:
 
-{chunk}
-"""
-            if not full_prompt.strip():
-                continue
+{text_chunks[0]}
+""".strip()
 
-            response = client.chat.completions.create(
-                model=deployment,
-                messages=[
-                    {"role": "system", "content": "Eres un asistente que resume papers académicos."},
-                    {"role": "user", "content": full_prompt}
-                ],
-                temperature=0.7,
-                max_tokens=200,
-                top_p=1.0
-            )
+        response = client.chat.completions.create(
+            model=deployment,
+            messages=[
+                {"role": "system", "content": "Eres un asistente que resume papers académicos."},
+                {"role": "user", "content": full_prompt}
+            ],
+            temperature=0.7,
+            max_tokens=200,
+            top_p=1.0
+        )
 
-            try:
-                raw_summary = (
-                    response.choices[0].message.content
-                    if response and getattr(response.choices[0], "message", None)
-                    else "No se recibió respuesta."
-                )
-                raw_summary = raw_summary.replace("\x00", "").strip()
-            except Exception:
-                raw_summary = "No se recibió respuesta."
+        # Extraemos SOLO el mensaje del asistente
+        msg = getattr(response.choices[0], "message", None)
+        content = (msg.content if msg and getattr(msg, "content", None) else "No se recibió respuesta.").replace("\x00", "").strip()
+        role = (msg.role if msg and getattr(msg, "role", None) else "assistant")
 
-            wrapped_summary = "\n".join(textwrap.fill(line, width=80) for line in raw_summary.splitlines())
-            summaries.append(wrapped_summary.strip())
+        # Retornamos EXCLUSIVAMENTE JSON (sin texto adicional)
+        return json.dumps({"content": content, "role": role}, ensure_ascii=False)
 
-        return "\n\n".join(summaries)
-
-    except Exception as e:
-        return f"Error al generar resumen web: {str(e)}"
+    except Exception:
+        # En cualquier error, seguimos devolviendo JSON válido
+        return json.dumps({"content": "No se recibió respuesta.", "role": "assistant"}, ensure_ascii=False)
