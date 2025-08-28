@@ -24,6 +24,29 @@ container_client = ContainerClient.from_container_url(f"{container_url}")
 qdrant_client = QdrantClient(url=QDRANT_URL, api_key=QDRANT_API_KEY)
 
 # ===============================
+# Setup de índices en Qdrant
+# ===============================
+def ensure_indexes():
+    """
+    Garantiza que 'filename' tenga índice de tipo keyword en Qdrant.
+    """
+    try:
+        qdrant_client.create_payload_index(
+            collection_name=QDRANT_COLLECTION,
+            field_name="filename",
+            field_schema=models.PayloadSchemaType.KEYWORD
+        )
+        print("📌 Índice 'filename' creado en Qdrant (o ya existía).")
+    except Exception as e:
+        if "already exists" in str(e).lower():
+            print("✅ Índice 'filename' ya existe en Qdrant.")
+        else:
+            print(f"⚠️ Error creando índice 'filename': {e}")
+
+# Crear índice al inicio
+ensure_indexes()
+
+# ===============================
 # Utilidades
 # ===============================
 def is_filename_indexed(filename: str) -> bool:
@@ -88,7 +111,7 @@ def load_pdfs_azure():
 
         filename = os.path.basename(blob.name)
 
-        # ⚡ Consulta puntual a Qdrant en vez de full scan
+        # ⚡ Consulta puntual a Qdrant
         if is_filename_indexed(filename):
             print(f"✅ Ya existe en Qdrant, omitiendo descarga: {filename}")
             continue
