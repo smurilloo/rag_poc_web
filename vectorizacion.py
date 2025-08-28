@@ -4,7 +4,7 @@ import hashlib
 import logging
 import urllib.parse
 from qdrant_client import QdrantClient
-from qdrant_client.models import Distance, VectorParams, PointStruct
+from qdrant_client.models import Distance, VectorParams, PointStruct, PayloadSchemaType
 from sentence_transformers import SentenceTransformer
 
 # ===============================
@@ -51,7 +51,7 @@ except Exception as e:
 # Funciones de soporte
 # ===============================
 def ensure_collection():
-    """Crea la colección si no existe"""
+    """Crea la colección si no existe y añade índices necesarios"""
     if not client.collection_exists(collection_name=COLLECTION_NAME):
         logger.info(f"📁 Colección '{COLLECTION_NAME}' no existe. Creando...")
         client.recreate_collection(
@@ -63,6 +63,27 @@ def ensure_collection():
         )
         wait_until_collection_ready()
         logger.info(f"✅ Colección '{COLLECTION_NAME}' creada y lista")
+
+    # Crear índices para evitar error de "Index required but not found"
+    try:
+        client.create_payload_index(
+            collection_name=COLLECTION_NAME,
+            field_name="filename",
+            field_schema=PayloadSchemaType.KEYWORD
+        )
+        logger.info("✅ Índice creado para 'filename'")
+    except Exception as e:
+        logger.warning(f"⚠️ Índice 'filename' ya existe o no pudo crearse: {e}")
+
+    try:
+        client.create_payload_index(
+            collection_name=COLLECTION_NAME,
+            field_name="url",
+            field_schema=PayloadSchemaType.KEYWORD
+        )
+        logger.info("✅ Índice creado para 'url'")
+    except Exception as e:
+        logger.warning(f"⚠️ Índice 'url' ya existe o no pudo crearse: {e}")
 
 def wait_until_collection_ready(max_retries=10, delay=2):
     """Espera hasta que la colección esté lista"""
@@ -189,6 +210,7 @@ def index_web_papers(web_papers: list[dict]):
 
 def search_qdrant(query: str, top_k: int = 5) -> list[dict]:
     """Busca en Qdrant y devuelve resultados"""
+    ensure_collection()
     query_vector = encoder.encode(query).tolist()
     hits = client.search(collection_name=COLLECTION_NAME, query_vector=query_vector, limit=top_k)
 
