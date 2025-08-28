@@ -7,7 +7,9 @@ import time
 import os
 import json
 
+# ---------------------------
 # Configuración desde variables de entorno
+# ---------------------------
 api_key = os.getenv("OPEN_AI_API_KEY_1")
 endpoint = os.getenv("OPEN_AI_ENDPOINT")
 deployment = os.getenv("OPEN_AI_DEPLOYMENT")
@@ -23,7 +25,7 @@ client = AzureOpenAI(
 )
 
 # ---------------------------
-# Funciones de búsqueda web
+# Funciones de búsqueda web con Selenium
 # ---------------------------
 def get_web_papers_selenium(query: str, max_pages: int = 2) -> List[Dict]:
     base_url = "https://scholar.google.com/scholar"
@@ -50,7 +52,12 @@ def get_web_papers_selenium(query: str, max_pages: int = 2) -> List[Dict]:
                 url = title_elem.get_attribute("href")
                 snippet_elem = art.find_elements(By.CLASS_NAME, "gs_rs")
                 snippet = snippet_elem[0].text.strip() if snippet_elem else "No hay resumen disponible."
-                results.append({"title": title, "url": url, "snippet": snippet, "page": page + 1})
+                results.append({
+                    "title": title,
+                    "url": url,
+                    "snippet": snippet,
+                    "page": page + 1
+                })
             except Exception:
                 continue
     driver.quit()
@@ -60,7 +67,9 @@ def get_web_papers_selenium(query: str, max_pages: int = 2) -> List[Dict]:
 # División segura de texto
 # ---------------------------
 def chunk_text_for_tokens(items: List[Dict], max_chars: int = 2000) -> List[str]:
-    """Divide los resultados en bloques pequeños (máx 2000 caracteres)."""
+    """
+    Divide los resultados en bloques pequeños (máx 2000 caracteres).
+    """
     chunks = []
     current_chunk = ""
     for item in items:
@@ -86,7 +95,10 @@ def get_annotated_summary(query: str) -> str:
     try:
         papers = get_web_papers_selenium(query)
         if not papers:
-            return json.dumps({"content": "No se encontraron artículos.", "role": "assistant"}, ensure_ascii=False)
+            return json.dumps(
+                {"content": "No se encontraron artículos.", "role": "assistant"},
+                ensure_ascii=False
+            )
 
         text_chunks = chunk_text_for_tokens(papers, max_chars=2000)
 
@@ -108,11 +120,21 @@ Analiza los siguientes artículos de Google Scholar y resume en máximo 3 párra
             top_p=1.0
         )
 
-        msg = getattr(response.choices[0], "message", None)
-        content = (msg.content if msg and getattr(msg, "content", None) else "No se recibió respuesta.").replace("\x00", "").strip()
-        role = (msg.role if msg and getattr(msg, "role", None) else "assistant")
+        # ✅ Ajuste seguro para extraer el mensaje
+        choice = response.choices[0]
+        msg = getattr(choice, "message", None)
+
+        if msg and isinstance(msg, dict):
+            content = msg.get("content", "No se recibió respuesta.").replace("\x00", "").strip()
+            role = msg.get("role", "assistant")
+        else:
+            content = "No se recibió respuesta."
+            role = "assistant"
 
         return json.dumps({"content": content, "role": role}, ensure_ascii=False)
 
-    except Exception:
-        return json.dumps({"content": "No se recibió respuesta.", "role": "assistant"}, ensure_ascii=False)
+    except Exception as e:
+        return json.dumps(
+            {"content": f"Error procesando la búsqueda: {str(e)}", "role": "assistant"},
+            ensure_ascii=False
+        )
