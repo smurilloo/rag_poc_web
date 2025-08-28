@@ -64,26 +64,17 @@ def ensure_collection():
         wait_until_collection_ready()
         logger.info(f"✅ Colección '{COLLECTION_NAME}' creada y lista")
 
-    # Crear índices para evitar error de "Index required but not found"
-    try:
-        client.create_payload_index(
-            collection_name=COLLECTION_NAME,
-            field_name="filename",
-            field_schema=PayloadSchemaType.KEYWORD
-        )
-        logger.info("✅ Índice creado para 'filename'")
-    except Exception as e:
-        logger.warning(f"⚠️ Índice 'filename' ya existe o no pudo crearse: {e}")
-
-    try:
-        client.create_payload_index(
-            collection_name=COLLECTION_NAME,
-            field_name="url",
-            field_schema=PayloadSchemaType.KEYWORD
-        )
-        logger.info("✅ Índice creado para 'url'")
-    except Exception as e:
-        logger.warning(f"⚠️ Índice 'url' ya existe o no pudo crearse: {e}")
+    # Crear índices consistentes
+    for field in ["filename", "url", "type", "title"]:
+        try:
+            client.create_payload_index(
+                collection_name=COLLECTION_NAME,
+                field_name=field,
+                field_schema=PayloadSchemaType.KEYWORD
+            )
+            logger.info(f"✅ Índice creado para '{field}'")
+        except Exception as e:
+            logger.warning(f"⚠️ Índice '{field}' ya existe o no pudo crearse: {e}")
 
 def wait_until_collection_ready(max_retries=10, delay=2):
     """Espera hasta que la colección esté lista"""
@@ -132,37 +123,31 @@ def index_pdf_chunks(pdf_data: list[dict]):
     """Indexa el contenido de PDFs en Qdrant"""
     ensure_collection()
 
-    # Calcular IDs de todo el batch
     id_to_content = {}
     for doc in pdf_data:
         for page in doc["pages_texts"]:
             content = page["text"].strip()
             if not content:
                 continue
-            uid = get_id(content)
+            uid = get_id(f"{doc['filename']}-{page['page']}-{content}")
             id_to_content[uid] = {
+                "type": "pdf",
                 "filename": doc["filename"],
-                "title": doc["title"],
+                "url": None,
+                "title": doc.get("title", ""),
                 "page": page["page"],
+                "score": None,
                 "content": content,
             }
 
-    # Filtrar solo los que NO existen
     existing_ids = _filter_existing_ids(list(id_to_content.keys()))
     new_ids = set(id_to_content.keys()) - existing_ids
 
-    # Generar solo los puntos nuevos
     new_points = [
         PointStruct(
             id=uid,
             vector=encoder.encode(data["content"]).tolist(),
-            payload={
-                "type": "pdf",
-                "filename": data["filename"],
-                "title": data["title"],
-                "page": data["page"],
-                "content": data["content"]
-            }
+            payload=data
         )
         for uid, data in id_to_content.items() if uid in new_ids
     ]
@@ -180,8 +165,10 @@ def index_web_papers(web_papers: list[dict]):
             continue
         uid = get_id(paper["url"])
         id_to_paper[uid] = {
+            "type": "web",
+            "filename": None,
             "url": paper["url"],
-            "title": paper["title"],
+            "title": paper.get("title", ""),
             "page": 1,
             "score": paper.get("score", 0),
             "content": snippet,
@@ -194,14 +181,7 @@ def index_web_papers(web_papers: list[dict]):
         PointStruct(
             id=uid,
             vector=encoder.encode(data["content"]).tolist(),
-            payload={
-                "type": "web",
-                "url": data["url"],
-                "title": data["title"],
-                "page": data["page"],
-                "score": data["score"],
-                "content": data["content"]
-            }
+            payload=data
         )
         for uid, data in id_to_paper.items() if uid in new_ids
     ]
@@ -218,10 +198,11 @@ def search_qdrant(query: str, top_k: int = 5) -> list[dict]:
     for hit in hits:
         payload = hit.payload
         results.append({
-            "type": payload["type"],
-            "source": payload.get("filename", payload.get("url")),
-            "title": payload["title"],
-            "page": payload["page"],
+            "type": payload.get("type"),
+            "filename": payload.get("filename"),
+            "url": payload.get("url"),
+            "title": payload.get("title"),
+            "page": payload.get("page"),
             "score": hit.score,
             "content": payload.get("content", "")
         })
