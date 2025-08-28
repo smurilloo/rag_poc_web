@@ -141,18 +141,21 @@ def index_pdf_chunks(pdf_data: list[dict]):
             }
 
     existing_ids = _filter_existing_ids(list(id_to_content.keys()))
-    new_ids = set(id_to_content.keys()) - existing_ids
+    new_ids = list(set(id_to_content.keys()) - existing_ids)
 
-    new_points = [
-        PointStruct(
-            id=uid,
-            vector=encoder.encode(data["content"]).tolist(),
-            payload=data
-        )
-        for uid, data in id_to_content.items() if uid in new_ids
-    ]
-
-    _upsert_points(new_points)
+    # Batch encoding
+    texts = [id_to_content[uid]["content"] for uid in new_ids]
+    if texts:
+        vectors = encoder.encode(texts, batch_size=32, show_progress_bar=True).tolist()
+        new_points = [
+            PointStruct(
+                id=uid,
+                vector=vec,
+                payload=id_to_content[uid]
+            )
+            for uid, vec in zip(new_ids, vectors)
+        ]
+        _upsert_points(new_points)
 
 def index_web_papers(web_papers: list[dict]):
     """Indexa papers web en Qdrant"""
@@ -175,18 +178,21 @@ def index_web_papers(web_papers: list[dict]):
         }
 
     existing_ids = _filter_existing_ids(list(id_to_paper.keys()))
-    new_ids = set(id_to_paper.keys()) - existing_ids
+    new_ids = list(set(id_to_paper.keys()) - existing_ids)
 
-    new_points = [
-        PointStruct(
-            id=uid,
-            vector=encoder.encode(data["content"]).tolist(),
-            payload=data
-        )
-        for uid, data in id_to_paper.items() if uid in new_ids
-    ]
-
-    _upsert_points(new_points)
+    # Batch encoding
+    texts = [id_to_paper[uid]["content"] for uid in new_ids]
+    if texts:
+        vectors = encoder.encode(texts, batch_size=32, show_progress_bar=True).tolist()
+        new_points = [
+            PointStruct(
+                id=uid,
+                vector=vec,
+                payload=id_to_paper[uid]
+            )
+            for uid, vec in zip(new_ids, vectors)
+        ]
+        _upsert_points(new_points)
 
 def search_qdrant(query: str, top_k: int = 5) -> list[dict]:
     """Busca en Qdrant y devuelve resultados"""
