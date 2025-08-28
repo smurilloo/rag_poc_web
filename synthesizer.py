@@ -27,17 +27,29 @@ encoder = SentenceTransformer("all-MiniLM-L6-v2")
 # ===============================
 def search_qdrant(query, top_k=5):
     query_vector = encoder.encode(query).tolist()
-    hits = client.search(
-        collection_name=COLLECTION_NAME,
-        query_vector=query_vector,
-        limit=top_k
-    )
+    try:
+        hits = client.search(
+            collection_name=COLLECTION_NAME,
+            query_vector=query_vector,
+            limit=top_k
+        )
+    except Exception as e:
+        # Captura el error de índice no encontrado
+        return [{"type": "error", "content": f"Error en búsqueda Qdrant: {str(e)}"}]
+
     results = []
     for hit in hits:
         payload = hit.payload
+        # Evitamos depender de índices que no existen (ej. filename)
+        source_field = None
+        if payload.get("type") == "pdf":
+            source_field = payload.get("filename", "")
+        else:
+            source_field = payload.get("url", "")
+
         results.append({
-            "type": payload["type"],
-            "filename" if payload["type"] == "pdf" else "url": payload.get("filename", payload.get("url")),
+            "type": payload.get("type", "unknown"),
+            "source": source_field,
             "title": payload.get("title", ""),
             "page": payload.get("page", 1),
             "score": hit.score,
@@ -49,13 +61,10 @@ def search_qdrant(query, top_k=5):
 # Helper: dividir textos en chunks
 # ===============================
 def chunk_text(items, max_chars=2000):  # reducido para evitar exceso de tokens
-    """
-    Divide contenido en bloques que no excedan max_chars caracteres (~500 tokens aprox).
-    """
     chunks = []
     current_chunk = ""
     for item in items:
-        if 'pages_texts' in item:  # PDFs
+        if 'pages_texts' in item:  # PDFs descargados
             for page in item['pages_texts']:
                 text = f"[{item['filename']} - Página {page['page']}]\n{page['text']}\n\n"
                 if len(current_chunk) + len(text) > max_chars:
@@ -64,12 +73,12 @@ def chunk_text(items, max_chars=2000):  # reducido para evitar exceso de tokens
                     current_chunk = text
                 else:
                     current_chunk += text
-        else:  # Web papers o Qdrant results
+        else:  # Resultados web o Qdrant
             snippet = item.get("content", "")
             if not snippet:
                 continue
             page_num = item.get("page", 1)
-            source = item.get("filename", item.get("url", ""))
+            source = item.get("source", "")
             title = item.get("title", "")
             text = f"[{source} - Página {page_num}] {title}\n{snippet}\n\n"
             if len(current_chunk) + len(text) > max_chars:
@@ -118,8 +127,6 @@ Información relevante:
 
 Responde en máximo 4 párrafos. Cita fuentes y páginas donde corresponda.
 """
-
-            # Si prompt excede 6000 caracteres, lo recortamos
             if len(prompt) > 6000:
                 prompt = prompt[:6000]
 
@@ -152,9 +159,7 @@ Responde en máximo 4 párrafos. Cita fuentes y páginas donde corresponda.
 
             summaries.append(raw_summary)
 
-        # Combinar todas las respuestas JSON en una lista
         return "[" + ",".join(summaries) + "]"
 
     except Exception as e:
         return json.dumps({"content": f"Error al generar respuesta: {str(e)}", "role": "assistant"})
-
