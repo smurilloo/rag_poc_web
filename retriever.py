@@ -31,17 +31,20 @@ def ensure_indexes():
     Garantiza que 'filename' tenga índice de tipo keyword en Qdrant.
     """
     try:
-        qdrant_client.create_payload_index(
-            collection_name=QDRANT_COLLECTION,
-            field_name="filename",
-            field_schema=models.PayloadSchemaType.KEYWORD
-        )
-        print("📌 Índice 'filename' creado en Qdrant (o ya existía).")
-    except Exception as e:
-        if "already exists" in str(e).lower():
-            print("✅ Índice 'filename' ya existe en Qdrant.")
+        collection_info = qdrant_client.get_collection(QDRANT_COLLECTION)
+        payload_schema = getattr(collection_info, "payload_schema", {}) or {}
+
+        if "filename" not in payload_schema:
+            qdrant_client.create_payload_index(
+                collection_name=QDRANT_COLLECTION,
+                field_name="filename",
+                field_schema=models.PayloadSchemaType.KEYWORD
+            )
+            print("📌 Índice 'filename' creado en Qdrant.")
         else:
-            print(f"⚠️ Error creando índice 'filename': {e}")
+            print("✅ Índice 'filename' ya existe en Qdrant.")
+    except Exception as e:
+        print(f"⚠️ Error verificando/creando índice 'filename': {e}")
 
 # Crear índice al inicio
 ensure_indexes()
