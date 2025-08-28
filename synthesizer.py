@@ -34,13 +34,11 @@ def search_qdrant(query, top_k=5):
             limit=top_k
         )
     except Exception as e:
-        # Captura el error de índice no encontrado
         return [{"type": "error", "content": f"Error en búsqueda Qdrant: {str(e)}"}]
 
     results = []
     for hit in hits:
         payload = hit.payload
-        # Evitamos depender de índices que no existen (ej. filename)
         source_field = None
         if payload.get("type") == "pdf":
             source_field = payload.get("filename", "")
@@ -60,11 +58,11 @@ def search_qdrant(query, top_k=5):
 # ===============================
 # Helper: dividir textos en chunks
 # ===============================
-def chunk_text(items, max_chars=2000):  # reducido para evitar exceso de tokens
+def chunk_text(items, max_chars=2000):
     chunks = []
     current_chunk = ""
     for item in items:
-        if 'pages_texts' in item:  # PDFs descargados
+        if 'pages_texts' in item:
             for page in item['pages_texts']:
                 text = f"[{item['filename']} - Página {page['page']}]\n{page['text']}\n\n"
                 if len(current_chunk) + len(text) > max_chars:
@@ -73,7 +71,7 @@ def chunk_text(items, max_chars=2000):  # reducido para evitar exceso de tokens
                     current_chunk = text
                 else:
                     current_chunk += text
-        else:  # Resultados web o Qdrant
+        else:
             snippet = item.get("content", "")
             if not snippet:
                 continue
@@ -98,7 +96,6 @@ def synthesize_answer(query, pdfs, pdf_metadata, memory, web_papers):
     try:
         qdrant_results = search_qdrant(query, top_k=5)
 
-        # Construir lista de contenido para chunking
         content_items = []
         if pdfs:
             content_items.extend(pdfs)
@@ -107,10 +104,8 @@ def synthesize_answer(query, pdfs, pdf_metadata, memory, web_papers):
         if qdrant_results:
             content_items.extend(qdrant_results)
 
-        # Dividir en chunks más pequeños
         text_chunks = chunk_text(content_items, max_chars=2000)
 
-        # Limitar memoria para no romper límite de tokens
         memory_safe = memory[-2000:] if memory else ""
 
         summaries = []
@@ -145,15 +140,12 @@ Responde en máximo 4 párrafos. Cita fuentes y páginas donde corresponda.
             )
 
             try:
-                raw_summary = (
-                    json.dumps(
-                        response.choices[0].message.to_dict(),
-                        ensure_ascii=False
-                    )
-                    if response and getattr(response.choices[0], "message", None)
-                    else '{"content":"No se recibió respuesta.","role":"assistant"}'
-                )
-                raw_summary = raw_summary.replace("\x00", "").strip()
+                msg = response.choices[0].message if response and response.choices else None
+                raw_summary = {
+                    "content": msg.content if msg else "No se recibió respuesta.",
+                    "role": msg.role if msg else "assistant"
+                }
+                raw_summary = json.dumps(raw_summary, ensure_ascii=False).replace("\x00", "").strip()
             except Exception:
                 raw_summary = '{"content":"No se recibió respuesta.","role":"assistant"}'
 
