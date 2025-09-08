@@ -3,7 +3,6 @@ import json
 from openai import AzureOpenAI
 from sentence_transformers import SentenceTransformer
 from vectorizacion import client, COLLECTION_NAME
-from fastapi.responses import StreamingResponse 
 
 # ===============================
 # Configuración desde variables de entorno
@@ -91,7 +90,7 @@ def chunk_text(items, max_chars=2000):
     return chunks
 
 # ===============================
-# Función: síntesis de respuesta segura con STREAMING
+# Función: síntesis de respuesta segura
 # ===============================
 def synthesize_answer(query, pdfs, pdf_metadata, memory, web_papers):
     try:
@@ -106,11 +105,12 @@ def synthesize_answer(query, pdfs, pdf_metadata, memory, web_papers):
             content_items.extend(qdrant_results)
 
         text_chunks = chunk_text(content_items, max_chars=2000)
+
         memory_safe = memory[-2000:] if memory else ""
 
-        def event_stream():
-            for chunk in text_chunks:
-                prompt = f"""
+        summaries = []
+        for chunk in text_chunks:
+            prompt = f"""
 Contexto previo:
 {memory_safe}
 
@@ -122,36 +122,36 @@ Información relevante:
 
 Responde en máximo 4 párrafos. Cita fuentes y páginas donde corresponda.
 """
-                if len(prompt) > 6000:
-                    prompt = prompt[:6000]
+            if len(prompt) > 6000:
+                prompt = prompt[:6000]
 
-                if not prompt.strip():
-                    continue
+            if not prompt.strip():
+                continue
 
-                # Llamada en modo streaming
-                with client_aoai.chat.completions.create(
-                    model=deployment,
-                    messages=[
-                        {"role": "system", "content": "Eres un asistente que resume PDFs y artículos académicos."},
-                        {"role": "user", "content": prompt}
-                    ],
-                    temperature=0.7,
-                    max_tokens=400,
-                    top_p=1.0,
-                    stream=True
-                ) as stream:
-                    for event in stream:
-                        if event.choices and event.choices[0].delta:
-                            delta = event.choices[0].delta.get("content", "")
-                            if delta:
-                                yield delta
+            response = client_aoai.chat.completions.create(
+                model=deployment,
+                messages=[
+                    {"role": "system", "content": "Eres un asistente que resume PDFs y artículos académicos."},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.7,
+                max_tokens=400,
+                top_p=1.0
+            )
 
-        # Enviar streaming a FastAPI
-        return StreamingResponse(event_stream(), media_type="text/plain")
+            try:
+                msg = response.choices[0].message if response and response.choices else None
+                raw_summary = {
+                    "content": msg.content if msg else "No se recibió respuesta.",
+                    "role": msg.role if msg else "assistant"
+                }
+                raw_summary = json.dumps(raw_summary, ensure_ascii=False).replace("\x00", "").strip()
+            except Exception:
+                raw_summary = '{"content":"No se recibió respuesta.","role":"assistant"}'
+
+            summaries.append(raw_summary)
+
+        return "[" + ",".join(summaries) + "]"
 
     except Exception as e:
-        return StreamingResponse(
-            iter([f"Error al generar respuesta: {str(e)}"]),
-            media_type="text/plain"
-        )
-
+        return json.dumps({"content": f"Error al generar respuesta: {str(e)}", "role": "assistant"})
