@@ -3,7 +3,7 @@ import json
 from openai import AzureOpenAI
 from sentence_transformers import SentenceTransformer
 from vectorizacion import client, COLLECTION_NAME
-from fastapi.responses import StreamingResponse  # <-- necesario para streaming
+from fastapi.responses import StreamingResponse 
 
 # ===============================
 # Configuración desde variables de entorno
@@ -154,3 +154,4 @@ Responde en máximo 4 párrafos. Cita fuentes y páginas donde corresponda.
             iter([f"Error al generar respuesta: {str(e)}"]),
             media_type="text/plain"
         )
+
