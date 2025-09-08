@@ -6,7 +6,6 @@ from selenium.webdriver.common.by import By
 import time
 import os
 import json
-from fastapi.responses import StreamingResponse 
 
 # ---------------------------
 # Configuración desde variables de entorno
@@ -86,50 +85,56 @@ def chunk_text_for_tokens(items: List[Dict], max_chars: int = 2000) -> List[str]
     return chunks
 
 # ---------------------------
-# Resumen seguro con STREAMING
+# Resumen seguro
 # ---------------------------
-def get_annotated_summary(query: str):
+def get_annotated_summary(query: str) -> str:
     """
-    Devuelve un StreamingResponse en tiempo real.
+    Devuelve SIEMPRE un string JSON con la forma:
+    {"content": "<texto>", "role": "assistant"}
     """
     try:
         papers = get_web_papers_selenium(query)
         if not papers:
-            return StreamingResponse(
-                iter([json.dumps({"content": "No se encontraron artículos.", "role": "assistant"}, ensure_ascii=False)]),
-                media_type="application/json"
+            return json.dumps(
+                {"content": "No se encontraron artículos.", "role": "assistant"},
+                ensure_ascii=False
             )
 
         text_chunks = chunk_text_for_tokens(papers, max_chars=2000)
 
+        # Tomamos solo el primer chunk para evitar sobrepasar contexto
         full_prompt = f"""
 Analiza los siguientes artículos de Google Scholar y resume en máximo 3 párrafos:
 
 {text_chunks[0]}
 """.strip()
 
-        def event_stream():
-            with client.chat.completions.create(
-                model=deployment,
-                messages=[
-                    {"role": "system", "content": "Eres un asistente que resume papers académicos."},
-                    {"role": "user", "content": full_prompt}
-                ],
-                temperature=0.7,
-                max_tokens=300,
-                top_p=1.0,
-                stream=True  
-            ) as stream:
-                for event in stream:
-                    if event.choices and event.choices[0].delta:
-                        delta = event.choices[0].delta.get("content", "")
-                        if delta:
-                            yield delta
+        response = client.chat.completions.create(
+            model=deployment,
+            messages=[
+                {"role": "system", "content": "Eres un asistente que resume papers académicos."},
+                {"role": "user", "content": full_prompt}
+            ],
+            temperature=0.7,
+            max_tokens=300,  
+            top_p=1.0
+        )
 
-        return StreamingResponse(event_stream(), media_type="text/plain")
+        # Ajuste seguro para extraer el mensaje
+        choice = response.choices[0]
+        msg = getattr(choice, "message", None)
+
+        if msg and isinstance(msg, dict):
+            content = msg.get("content", "No se recibió respuesta.").replace("\x00", "").strip()
+            role = msg.get("role", "assistant")
+        else:
+            content = "No se recibió respuesta."
+            role = "assistant"
+
+        return json.dumps({"content": content, "role": role}, ensure_ascii=False)
 
     except Exception as e:
-        return StreamingResponse(
-            iter([json.dumps({"content": f"Error procesando la búsqueda: {str(e)}", "role": "assistant"}, ensure_ascii=False)]),
-            media_type="application/json"
+        return json.dumps(
+            {"content": f"Error procesando la búsqueda: {str(e)}", "role": "assistant"},
+            ensure_ascii=False
         )
