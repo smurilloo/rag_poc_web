@@ -1,10 +1,11 @@
+
 from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pathlib import Path
 from memory_keeper import MemoryKeeper
 from retriever import load_pdfs_azure
-from synthesizer import synthesize_answer  # <- este lo ajustaremos para soportar streaming
+from synthesizer import synthesize_answer
 from web_searcher import get_web_papers_selenium
 from vectorizacion import (
     index_web_papers,
@@ -63,21 +64,14 @@ async def ask(request: Request):
         # Recuperar memoria contextual
         memory = memory_keeper.get_context()
 
-        # ✅ Streaming con Azure OpenAI
-        def event_stream():
-            try:
-                for chunk in synthesize_answer(
-                    question, pdf_texts_by_pages, pdf_metadata, memory, web_papers, stream=True
-                ):
-                    if chunk:
-                        yield chunk
-                # Guardar en memoria cuando termine
-                final_answer = memory_keeper.remember(question, "")  
-                # opcional: si quieres persistir todo al final
-            except Exception as e:
-                yield f"\n[ERROR] {str(e)}"
+        # Generar respuesta con Azure OpenAI
+        answer = synthesize_answer(question, pdf_texts_by_pages, pdf_metadata, memory, web_papers)
 
-        return StreamingResponse(event_stream(), media_type="text/plain")
+        # Guardar en memoria
+        memory_keeper.remember(question, answer)
+
+        # Respuesta JSON serializable
+        return JSONResponse(content={"answer": answer})
 
     except Exception as e:
         return JSONResponse(content={"answer": f"Error procesando la consulta: {str(e)}"})
